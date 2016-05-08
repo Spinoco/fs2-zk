@@ -18,17 +18,17 @@ object ZkOp {
   /**
     * Deletes given node
     */
-  case class Delete(node:ZkNode) extends ZkOp
+  case class Delete(node:ZkNode, version:Option[Int]) extends ZkOp
 
   /**
     * Sets data on given node
     */
-  case class SetData(node:ZkNode, data:Option[Chunk.Bytes]) extends ZkOp
+  case class SetData(node:ZkNode, data:Option[Chunk.Bytes], version:Option[Int]) extends ZkOp
 
   /**
     * Performs check that given node is of supplied version
     */
-  case class Check(node:ZkNode, version: Int) extends ZkOp
+  case class Check(node:ZkNode, version: Option[Int]) extends ZkOp
 
 }
 
