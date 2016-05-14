@@ -26,9 +26,13 @@ lazy val commonSettings = Seq(
   scalacOptions in (Test, console) <<= (scalacOptions in (Compile, console)),
   libraryDependencies ++= Seq(
     "org.scalatest" %% "scalatest" % "3.0.0-M16-SNAP4" % "test"
+    , "org.scalacheck" %% "scalacheck" % "1.13.1" % "test"
+    //, "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
+
     , "co.fs2" %% "fs2-core" % "0.9.0-S1-SNAPSHOT"
     , "co.fs2" %% "fs2-io" % "0.9.0-S1-SNAPSHOT"
     , "org.apache.zookeeper" % "zookeeper" % "3.4.8"
+
   ),
   scmInfo := Some(ScmInfo(url("https://github.com/Spinoco/fs2-zk"), "git@github.com:Spinoco/fs2-zk.git")),
   homepage := None,

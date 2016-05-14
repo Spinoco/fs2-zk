@@ -1,5 +1,7 @@
 package spinoco.fs2.zk
 
+import org.apache.zookeeper.ZooDefs
+
 
 /**
   * ACL Entry of ZooKeeper Node
@@ -14,11 +16,15 @@ case class ZkACL (
 object ZkACL {
 
   val NoAccess = Permission(0)
-  val Read = Permission(1)
-  val Write = Permission(2)
-  val Create = Permission(4)
-  val Delete = Permission(8)
-  val Admin =  Permission(16)
+  val Read = Permission(ZooDefs.Perms.READ)
+  val Write = Permission(ZooDefs.Perms.WRITE)
+  val Create = Permission(ZooDefs.Perms.CREATE)
+  val Delete = Permission(ZooDefs.Perms.DELETE)
+  val Admin =  Permission(ZooDefs.Perms.ADMIN)
+  val All =  Permission(ZooDefs.Perms.ALL)
+
+  val ACL_OPEN_UNSAFE = ZkACL(All,"world","anyone")
+
 
   case class Permission(value:Int)
 

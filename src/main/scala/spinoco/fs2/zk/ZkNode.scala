@@ -22,5 +22,9 @@ object ZkNode {
 
 
 
+  implicit class ZkNodeSyntax(val self: ZkNode) extends AnyVal {
+    def / (path:String) :Try[ZkNode] = parse(self.path+"/"+path)
+  }
+
 
 }

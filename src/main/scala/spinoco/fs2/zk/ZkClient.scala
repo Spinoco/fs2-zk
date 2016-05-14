@@ -8,8 +8,8 @@ import fs2.Async.Run
 import fs2.Chunk.Bytes
 import fs2._
 import fs2.Stream._
-
 import fs2.async.mutable.Signal
+
 import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.Watcher.Event.EventType
 
@@ -266,14 +266,23 @@ object ZkClient {
     }
 
     def childrenOf[F[_] :Async :Run](zk:ZooKeeper,node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
-      mkZkStream { case (cb,watcher) =>
-        zk.getChildren(node.path, watcher, mkChildren2CallBack(cb), null)
+      def children:Stream[F, Option[(List[ZkNode], ZkStat)]] =
+        mkZkStream { case (cb,watcher) =>
+          zk.getChildren(node.path, watcher, mkChildren2CallBack(node)(cb), null)
+        }
+      def go:Stream[F, Option[(List[ZkNode], ZkStat)]] = {
+        children flatMap {
+          case None =>
+            emit(None) ++ (exists(zk, node).find(_.isDefined) flatMap { _ => go })
+          case result => emit(result)
+        }
       }
+      go
     }
 
     def childrenNowOf[F[_]](zk:ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[(List[ZkNode], ZkStat)]] = {
       F.async { cb =>
-        F.suspend { zk.getChildren(node.path,false,mkChildren2CallBack(cb), null) }
+        F.suspend { zk.getChildren(node.path,false,mkChildren2CallBack(node)(cb), null) }
       }
     }
 
@@ -338,13 +347,13 @@ object ZkClient {
     }
 
 
-    def mkChildren2CallBack(cb: Either[Throwable, Option[(List[ZkNode], ZkStat)]] => Unit):Children2Callback = {
+    def mkChildren2CallBack(parent:ZkNode)(cb: Either[Throwable, Option[(List[ZkNode], ZkStat)]] => Unit):Children2Callback = {
       new Children2Callback {
         def processResult(rc: Int, path: String, ctx: scala.Any, children: JList[String], stat:Stat): Unit = {
           def result:Option[(List[ZkNode], ZkStat)] = {
             if (children == null) Some(List.empty -> zkStats(stat))
             else {
-              val result = children.asScala.toList.map(ZkNode.parse).collect { case Success(zkn) => zkn}
+              val result = children.asScala.toList.map(parent / _).collect { case Success(zkn) => zkn}
               Some(result -> zkStats(stat))
             }
           }
@@ -435,12 +444,9 @@ object ZkClient {
     }
 
     def fromZkACL(acls:List[ZkACL]): JList[ACL] = {
-      if (acls.isEmpty) null
-      else {
-        acls.map { zkAcl =>
-          new ACL(zkAcl.permission.value,new Id(zkAcl.scheme, zkAcl.entity) )
-        }.asJava
-      }
+      acls.map { zkAcl =>
+        new ACL(zkAcl.permission.value,new Id(zkAcl.scheme, zkAcl.entity) )
+      }.asJava
     }
 
     def toZkACL(acls:JList[ACL]):List[ZkACL] = {
