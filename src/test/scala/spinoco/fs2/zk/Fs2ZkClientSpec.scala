@@ -26,11 +26,6 @@ class Fs2ZkClientSpec extends FreeSpec
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 25, workers = 1)
 
-//  override def runTest(testName: String, args: Args): Status = {
-//    println("Starting " + testName)
-//    try super.runTest(testName, args)
-//    finally println("Finished " + testName)
-//  }
 
   implicit val S: Strategy = Strategy.fromFixedDaemonPool(8,"fs2-zk-spec")
   implicit val Sch: ScheduledExecutorService =  Executors.newScheduledThreadPool(4)

@@ -15,13 +15,11 @@ object TestUtil {
     F.suspend {
       Files.walkFileTree(path, new SimpleFileVisitor[Path] {
         override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
-          println(("REMOVING", file))
           Files.delete(file)
           FileVisitResult.CONTINUE
         }
 
         override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
-          println(("REMOVING", dir))
           Files.delete(dir)
           FileVisitResult.CONTINUE
         }

@@ -23,7 +23,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
         }.runLog.run.unsafeRun
 
       result should have size(2)
-      result(0) shouldBe Right(node1.path)
+      result(0) shouldBe Right(node1)
       result(1).left.map(_.nonEmpty) shouldBe Left(true)
 
     }

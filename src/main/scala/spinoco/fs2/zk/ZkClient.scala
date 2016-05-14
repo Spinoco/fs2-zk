@@ -40,7 +40,7 @@ trait ZkClient[F[_]] {
     * @param acl            ACLs applied for the node
     * @param createMode     Creation Mode of the node
     */
-  def create(node:ZkNode, createMode:ZkCreateMode, data:Option[Chunk.Bytes], acl:List[ZkACL] ):F[String]
+  def create(node:ZkNode, createMode:ZkCreateMode, data:Option[Chunk.Bytes], acl:List[ZkACL] ):F[ZkNode]
 
   /**
     * Delete node at given patth. Optionally specify version to delete node if node's version matches supplied version
@@ -181,7 +181,6 @@ object ZkClient {
                 case Some(error) => Logger.log(Level.SEVERE,s"Failed to signal ZkClient state change: $event", error)
               }
             case other =>
-              println(("XXXR >>>>> OTHER", other))
               ()
           }
         }
@@ -217,7 +216,7 @@ object ZkClient {
           def delete(node: ZkNode, version: Option[Int]): F[Unit] = impl.delete(zk, node, version)
           def atomic(ops: List[ZkOp]): F[List[ZkOpResult]] = impl.atomic(zk,ops)
           def aclOf(node: ZkNode): F[Option[List[ZkACL]]] = impl.aclOf(zk,node)
-          def create(node: ZkNode, createMode: ZkCreateMode, data: Option[Bytes], acl: List[ZkACL]): F[String] =  impl.create(zk,node,createMode, data, acl)
+          def create(node: ZkNode, createMode: ZkCreateMode, data: Option[Bytes], acl: List[ZkACL]): F[ZkNode] =  impl.create(zk,node,createMode, data, acl)
           def exists(node: ZkNode): Stream[F, Option[ZkStat]] = impl.exists(zk,node)
           def childrenOf(node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = impl.childrenOf(zk,node)
           def childrenNowOf(node: ZkNode): F[Option[(List[ZkNode], ZkStat)]] = impl.childrenNowOf(zk,node)
@@ -228,10 +227,10 @@ object ZkClient {
 
 
 
-    def create[F[_]](zk:ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Bytes], acl: List[ZkACL])(implicit F: Async[F]): F[String] = {
-      F.async { cb =>
+    def create[F[_]](zk:ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Bytes], acl: List[ZkACL])(implicit F: Async[F]): F[ZkNode] = {
+      F.map(F.async[String] { cb =>
         F.suspend(zk.create(node.path,data.map(zkData).orNull,fromZkACL(acl), zkCreateMode(createMode), stringCallBack(cb), null))
-      }
+      })(ZkNode.apply)
     }
 
     def dataNowOf[F[_]](zk:ZooKeeper, node:ZkNode)(implicit F: Async[F]):F[Option[(Bytes, ZkStat)]] =
