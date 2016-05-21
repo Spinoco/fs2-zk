@@ -1,6 +1,7 @@
 package spinoco.fs2.zk
 
 import fs2.Stream._
+import fs2.util.Task
 import fs2.{Chunk, time}
 
 import concurrent.duration._
@@ -12,7 +13,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
 
     val node1 = ZkNode.parse("/n1").get
 
-    def sleep1s = time.sleep(1.second)
+    def sleep1s = time.sleep[Task](1.second)
 
     "create and delete Node" in {
 
@@ -101,8 +102,8 @@ class ZkClientSpec extends Fs2ZkClientSpec {
       val result =
         standaloneServer.flatMap { zks =>
           val observe = clientTo(zks) flatMap { _.clientState }
-          val shutdown = time.sleep(2.seconds) ++ eval_(zks.shutdown)
-          val startup = time.sleep(1.seconds) ++ eval_(zks.startup)
+          val shutdown = time.sleep[Task](2.seconds) ++ eval_(zks.shutdown)
+          val startup = time.sleep[Task](1.seconds) ++ eval_(zks.startup)
           observe mergeDrainR (shutdown ++ startup)
         }
         .take(3)

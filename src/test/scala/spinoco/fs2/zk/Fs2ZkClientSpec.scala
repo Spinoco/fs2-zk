@@ -1,6 +1,5 @@
 package spinoco.fs2.zk
 
-import java.util.concurrent.{Executors, ScheduledExecutorService}
 
 import fs2.Stream._
 import fs2._
@@ -28,7 +27,7 @@ class Fs2ZkClientSpec extends FreeSpec
 
 
   implicit val S: Strategy = Strategy.fromFixedDaemonPool(8,"fs2-zk-spec")
-  implicit val Sch: ScheduledExecutorService =  Executors.newScheduledThreadPool(4)
+  implicit val Sch: Scheduler =  Scheduler.fromFixedDaemonPool(4, "fs2-zk-spec-scheduler")
 
   def standaloneServer:Stream[Task,ZkSpecServer[Task]] =
     ZkSpecServer.startStandalone[Task]()

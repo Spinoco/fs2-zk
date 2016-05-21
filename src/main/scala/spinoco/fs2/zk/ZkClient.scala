@@ -176,7 +176,7 @@ object ZkClient {
         def process(event: WatchedEvent): Unit = {
           event.getType match {
             case EventType.None =>
-              R.runEffects(signal.set(Some(ZkClientState.fromZk(event.getState)))) match {
+              R.unsafeRunEffects(signal.set(Some(ZkClientState.fromZk(event.getState)))) match {
                 case None => ()
                 case Some(error) => Logger.log(Level.SEVERE,s"Failed to signal ZkClient state change: $event", error)
               }
@@ -407,7 +407,7 @@ object ZkClient {
     def mkWatcher[F[_]](implicit F:Async[F], R:Run[F]):F[(Watcher, F[Unit])] = {
       F.map(F.ref[Unit]){ ref =>
         val watcher = new Watcher {
-          def process(event: WatchedEvent): Unit = { R.runEffects(F.setPure(ref)(())); () }
+          def process(event: WatchedEvent): Unit = { R.unsafeRunEffects(F.setPure(ref)(())); () }
         }
         watcher -> F.get(ref)
       }
