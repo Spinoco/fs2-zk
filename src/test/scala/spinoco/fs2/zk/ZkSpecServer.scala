@@ -41,12 +41,12 @@ object ZkSpecServer {
     * @return
     */
   def standalone[F[_]](port:Int = 10000) (implicit F:Async[F]): Stream[F,ZkSpecServer[F]] = {
-    eval(F.suspend(Files.createTempDirectory(s"ZK_${UUID.randomUUID()}"))) flatMap { dataDir =>
+    eval(F.suspend(F.pure(Files.createTempDirectory(s"ZK_${UUID.randomUUID()}")))) flatMap { dataDir =>
       def buildServer: F[ZkSpecServer[F]] = {
-        F.suspend {
+        F.suspend { F.pure {
           val props = impl.mkProps(Seq(port), 1, dataDir)
           impl.mkZkServer(impl.mkServerConfig(props))
-        }
+        }}
       }
 
       def cleanup(zkS:ZkSpecServer[F]) : F[Unit] = {
@@ -101,7 +101,7 @@ object ZkSpecServer {
       val runningServer = new AtomicReference[ZooKeeperServer]()
       new ZkSpecServer[F] {
 
-        def clientAddress: F[InetSocketAddress] = F.suspend(config.getClientPortAddress)
+        def clientAddress: F[InetSocketAddress] = F.suspend(F.pure(config.getClientPortAddress))
 
         def startup: F[Unit] = F.map(configureServer(config)) { server =>
           runningServer.set(server)
@@ -116,11 +116,11 @@ object ZkSpecServer {
         }
 
 
-        def shutdown: F[Unit] = F.suspend {
+        def shutdown: F[Unit] = F.suspend { F.pure {
           val server = runningServer.get()
           runningServer.set(null)
           if (server != null)  { server.getServerCnxnFactory.shutdown(); server.shutdown() }
-        }
+        }}
       }
     }
 
@@ -130,7 +130,7 @@ object ZkSpecServer {
       props
     }
 
-    def configureServer[F[_]](config:ServerConfig)(implicit F:Async[F]): F[ZooKeeperServer] = F.suspend {
+    def configureServer[F[_]](config:ServerConfig)(implicit F:Async[F]): F[ZooKeeperServer] = F.suspend { F.pure {
       val zkServer: ZooKeeperServer = new ZooKeeperServer
 
       val txnLog = new FileTxnSnapLog(new File(config.getDataDir), new File(config.getDataLogDir))
@@ -139,7 +139,7 @@ object ZkSpecServer {
       zkServer.setMinSessionTimeout(config.getMinSessionTimeout)
       zkServer.setMaxSessionTimeout(config.getMaxSessionTimeout)
       zkServer
-    }
+    }}
 
 
 

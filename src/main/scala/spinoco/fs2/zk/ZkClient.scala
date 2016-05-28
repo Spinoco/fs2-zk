@@ -142,7 +142,7 @@ object ZkClient {
       }
     )(
       (impl.clientStream[F](allowReadOnly) _).tupled
-      , { case (_, zk ) => F.suspend(zk.close()) }
+      , { case (_, zk ) => F.suspend(F.pure(zk.close())) }
     )
   }
 
@@ -176,9 +176,8 @@ object ZkClient {
         def process(event: WatchedEvent): Unit = {
           event.getType match {
             case EventType.None =>
-              R.unsafeRunEffects(signal.set(Some(ZkClientState.fromZk(event.getState)))) match {
-                case None => ()
-                case Some(error) => Logger.log(Level.SEVERE,s"Failed to signal ZkClient state change: $event", error)
+              R.unsafeRunAsyncEffects(signal.set(Some(ZkClientState.fromZk(event.getState)))){ err =>
+                Logger.log(Level.SEVERE,s"Failed to signal ZkClient state change: $event", err)
               }
             case other =>
               ()
@@ -205,9 +204,9 @@ object ZkClient {
 
 
     def makeClient[F[_]](zk:ZooKeeper, signal:Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F], R:Run[F]):F[ZkClient[F]] = {
-      F.suspend {
+      F.suspend { F.pure {
         new ZkClient[F] {
-          def sessionId: F[Long] = F.suspend(zk.getSessionId)
+          def sessionId: F[Long] = F.suspend(F.pure(zk.getSessionId))
           def dataNowOf(node: ZkNode): F[Option[(Bytes, ZkStat)]] = impl.dataNowOf(zk,node)
           def dataOf(node: ZkNode): Stream[F, Option[(Bytes, ZkStat)]] = impl.dataOf(zk,node)
           def setAclOf(node: ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]] = impl.setAclOf(zk,node, acl, version)
@@ -222,20 +221,20 @@ object ZkClient {
           def childrenNowOf(node: ZkNode): F[Option[(List[ZkNode], ZkStat)]] = impl.childrenNowOf(zk,node)
           def clientState: Stream[F, ZkClientState.Value] = signal.discrete.collect(Function.unlift(identity))
         }
-      }
+      }}
     }
 
 
 
     def create[F[_]](zk:ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Bytes], acl: List[ZkACL])(implicit F: Async[F]): F[ZkNode] = {
       F.map(F.async[String] { cb =>
-        F.suspend(zk.create(node.path,data.map(zkData).orNull,fromZkACL(acl), zkCreateMode(createMode), stringCallBack(cb), null))
+        F.suspend(F.pure(zk.create(node.path,data.map(zkData).orNull,fromZkACL(acl), zkCreateMode(createMode), stringCallBack(cb), null)))
       })(ZkNode.apply)
     }
 
     def dataNowOf[F[_]](zk:ZooKeeper, node:ZkNode)(implicit F: Async[F]):F[Option[(Bytes, ZkStat)]] =
       F.async { cb =>
-        F.suspend(zk.getData(node.path,false, mkDataCallBack(cb), null))
+        F.suspend(F.pure(zk.getData(node.path,false, mkDataCallBack(cb), null)))
       }
 
 
@@ -247,7 +246,7 @@ object ZkClient {
 
     def setDataOf[F[_]](zk:ZooKeeper,node: ZkNode, data: Option[Bytes], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
       F.async { cb =>
-        F.suspend { zk.setData(node.path, data.map(zkData).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) }
+        F.suspend { F.pure { zk.setData(node.path, data.map(zkData).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } }
       }
     }
 
@@ -260,7 +259,7 @@ object ZkClient {
 
     def existsNow[F[_]](zk:ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[ZkStat]] = {
       F.async { cb =>
-        F.suspend { zk.exists(node.path,false,mkStatCallBack(cb),null) }
+        F.suspend { F.pure { zk.exists(node.path,false,mkStatCallBack(cb),null) }}
       }
     }
 
@@ -281,31 +280,31 @@ object ZkClient {
 
     def childrenNowOf[F[_]](zk:ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[(List[ZkNode], ZkStat)]] = {
       F.async { cb =>
-        F.suspend { zk.getChildren(node.path,false,mkChildren2CallBack(node)(cb), null) }
+        F.suspend { F.pure { zk.getChildren(node.path,false,mkChildren2CallBack(node)(cb), null) }}
       }
     }
 
     def aclOf[F[_]](zk:ZooKeeper,node: ZkNode)(implicit F: Async[F]): F[Option[List[ZkACL]]] = {
       F.async { cb =>
-        F.suspend { zk.getACL(node.path,null,mkACLCallBack(cb),null) }
+        F.suspend { F.pure { zk.getACL(node.path,null,mkACLCallBack(cb),null) } }
       }
     }
 
     def setAclOf[F[_]](zk:ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
       F.async { cb =>
-        F.suspend { zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1),mkStatCallBack(cb),null)  }
+        F.suspend { F.pure { zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1),mkStatCallBack(cb),null)  } }
       }
     }
 
     def delete[F[_]](zk:ZooKeeper, node: ZkNode, version: Option[Int])(implicit F: Async[F]): F[Unit] = {
       F.async { cb =>
-        F.suspend { zk.delete(node.path, version.getOrElse(-1), mkVoidCallBack(cb), null)}
+        F.suspend { F.pure { zk.delete(node.path, version.getOrElse(-1), mkVoidCallBack(cb), null) } }
       }
     }
 
     def atomic[F[_]](zk:ZooKeeper,ops: List[ZkOp])(implicit F: Async[F]): F[List[ZkOpResult]] = {
       F.async { cb =>
-        F.suspend { zk.multi(toOp(ops),mkMultiCallBack(cb),null) }
+        F.suspend { F.pure { zk.multi(toOp(ops),mkMultiCallBack(cb),null) } }
       }
     }
 
@@ -407,7 +406,7 @@ object ZkClient {
     def mkWatcher[F[_]](implicit F:Async[F], R:Run[F]):F[(Watcher, F[Unit])] = {
       F.map(F.ref[Unit]){ ref =>
         val watcher = new Watcher {
-          def process(event: WatchedEvent): Unit = { R.unsafeRunEffects(F.setPure(ref)(())); () }
+          def process(event: WatchedEvent): Unit = { R.unsafeRunAsyncEffects(F.setPure(ref)(()))(_ => ()) }
         }
         watcher -> F.get(ref)
       }
@@ -421,7 +420,7 @@ object ZkClient {
       def readF:F[(O, F[Unit])] = {
         F.bind(mkWatcher[F]){ case (watcher, awaitWatch) =>
         F.async[(O, F[Unit])] { cb =>
-          F.suspend(register({ r => cb(r.right.map(_ -> awaitWatch))}, watcher))
+          F.suspend(F.pure(register({ r => cb(r.right.map(_ -> awaitWatch))}, watcher)))
         }}
       }
       def go:Stream[F,O] = {

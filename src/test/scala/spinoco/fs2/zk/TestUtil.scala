@@ -12,7 +12,7 @@ import fs2.Async
 object TestUtil {
 
   def removeRecursively[F[_]](path:Path)(implicit F:Async[F]):F[Unit] = {
-    F.suspend {
+    F.suspend { F.pure {
       Files.walkFileTree(path, new SimpleFileVisitor[Path] {
         override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
           Files.delete(file)
@@ -25,7 +25,7 @@ object TestUtil {
         }
       })
       ()
-    }
+    }}
   }
 
 }

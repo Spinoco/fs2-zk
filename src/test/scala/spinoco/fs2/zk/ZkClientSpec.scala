@@ -21,7 +21,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
         standaloneServerAndClient.flatMap { case (zks, zkc) =>
             eval(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))).map(Right(_)) ++
             eval(zkc.existsNow(node1)).map(Left(_))
-        }.runLog.run.unsafeRun
+        }.runLog.unsafeRun
 
       result should have size(2)
       result(0) shouldBe Right(node1)
@@ -46,7 +46,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
           observe mergeDrainR modify
         }
         .map { _.map(_.dataLength) }
-        .take(4).runLog.run.timed(5.seconds).unsafeRun
+        .take(4).runLog.timed(5.seconds).unsafeRun
 
       result shouldBe Vector(
         None
@@ -81,7 +81,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
            observe mergeDrainR modify
          }
          . map { _.map(_._1) }
-         .take(9).runLog.run.timed(10.seconds).unsafeRun
+         .take(9).runLog.timed(10.seconds).unsafeRun
 
       result shouldBe Vector(
         None
@@ -107,7 +107,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
           observe mergeDrainR (shutdown ++ startup)
         }
         .take(3)
-        .runLog.run.timed(10.seconds).unsafeRun
+        .runLog.timed(10.seconds).unsafeRun
 
       result shouldBe Vector(
         ZkClientState.SyncConnected
