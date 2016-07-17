@@ -1,7 +1,7 @@
 package spinoco.fs2.zk
 
 import fs2.Stream._
-import fs2.util.Task
+import fs2.Task
 import fs2.{Chunk, time}
 
 import concurrent.duration._
@@ -39,14 +39,14 @@ class ZkClientSpec extends Fs2ZkClientSpec {
             sleep1s ++
               clientTo(zks) flatMap { zkc =>
                 eval_(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))) ++
-                  sleep1s ++ eval_(zkc.setDataOf(node1, Some(new Chunk.Bytes(Array[Byte](1,2,3), 0, 3)), None)) ++
+                  sleep1s ++ eval_(zkc.setDataOf(node1, Some(Chunk.bytes(Array[Byte](1,2,3), 0, 3)), None)) ++
                   sleep1s ++ eval_(zkc.delete(node1, None))
             }
 
           observe mergeDrainR modify
         }
         .map { _.map(_.dataLength) }
-        .take(4).runLog.timed(5.seconds).unsafeRun
+        .take(4).runLog.unsafeTimed(5.seconds).unsafeRun
 
       result shouldBe Vector(
         None
@@ -81,7 +81,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
            observe mergeDrainR modify
          }
          . map { _.map(_._1) }
-         .take(9).runLog.timed(10.seconds).unsafeRun
+         .take(9).runLog.unsafeTimed(10.seconds).unsafeRun
 
       result shouldBe Vector(
         None
@@ -107,7 +107,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
           observe mergeDrainR (shutdown ++ startup)
         }
         .take(3)
-        .runLog.timed(10.seconds).unsafeRun
+        .runLog.unsafeTimed(10.seconds).unsafeRun
 
       result shouldBe Vector(
         ZkClientState.SyncConnected

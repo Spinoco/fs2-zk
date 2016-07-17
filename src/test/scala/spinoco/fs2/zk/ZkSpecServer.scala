@@ -8,6 +8,7 @@ import java.util.{Properties, UUID}
 
 import org.apache.zookeeper.server.{ServerCnxnFactory, ServerConfig, ZooKeeperServer}
 import fs2._
+import fs2.util.Async
 import fs2.Stream._
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig
@@ -50,7 +51,7 @@ object ZkSpecServer {
       }
 
       def cleanup(zkS:ZkSpecServer[F]) : F[Unit] = {
-        F.bind(zkS.shutdown) { _ => TestUtil.removeRecursively(dataDir) }
+        F.flatMap(zkS.shutdown) { _ => TestUtil.removeRecursively(dataDir) }
       }
 
       Stream.bracket(buildServer)(zks => emit(zks), cleanup)

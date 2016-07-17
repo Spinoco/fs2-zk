@@ -1,8 +1,7 @@
 package spinoco.fs2
 
-import fs2.Async.Run
 import fs2._
-import fs2.Async
+import fs2.util.Async
 
 import scala.concurrent.duration._
 
@@ -24,10 +23,8 @@ package object zk {
     * @param credentials      If Zookeeper ensemble requires authentication, credentials may be passed in here.
     * @param allowReadOnly    True, indicates that if ensemble loses majority, the client will switch to readonly mode instead
     *                         of failing.
-    * @tparam F
-    * @return
     */
-  def client[F[_]: Async: Run](
+  def client[F[_]: Async](
     ensemble:String
     , credentials:Option[(String, Chunk.Bytes)] = None
     , allowReadOnly:Boolean = false

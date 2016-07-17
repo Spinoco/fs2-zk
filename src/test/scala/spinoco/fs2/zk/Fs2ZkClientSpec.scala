@@ -3,7 +3,7 @@ package spinoco.fs2.zk
 
 import fs2.Stream._
 import fs2._
-import fs2.util.Task
+import fs2.Task
 import org.scalatest.concurrent.{Eventually, TimeLimitedTests}
 import org.scalatest.{FreeSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks

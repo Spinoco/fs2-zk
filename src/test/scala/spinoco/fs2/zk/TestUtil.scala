@@ -4,7 +4,7 @@ import java.io.IOException
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
-import fs2.Async
+import fs2.util.Async
 
 /**
   * Created by pach on 14/05/16.

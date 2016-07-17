@@ -4,9 +4,9 @@ package spinoco.fs2.zk
 import java.time.{ZoneId, Instant, LocalDateTime}
 import java.util.logging.Level
 
-import fs2.Async.Run
-import fs2.Chunk.Bytes
+ 
 import fs2._
+import fs2.util.Async
 import fs2.Stream._
 import fs2.async.mutable.Signal
 
@@ -40,7 +40,7 @@ trait ZkClient[F[_]] {
     * @param acl            ACLs applied for the node
     * @param createMode     Creation Mode of the node
     */
-  def create(node:ZkNode, createMode:ZkCreateMode, data:Option[Chunk.Bytes], acl:List[ZkACL] ):F[ZkNode]
+  def create(node:ZkNode, createMode:ZkCreateMode, data:Option[Chunk[Byte]], acl:List[ZkACL] ):F[ZkNode]
 
   /**
     * Delete node at given patth. Optionally specify version to delete node if node's version matches supplied version
@@ -85,13 +85,13 @@ trait ZkClient[F[_]] {
   /**
     * Returns data of the specified node. Possibly evals to None if either node does not exists, or no data are set.
     */
-  def dataNowOf(node:ZkNode):F[Option[(Chunk.Bytes, ZkStat)]]
+  def dataNowOf(node:ZkNode):F[Option[(Chunk[Byte], ZkStat)]]
 
   /**
     * Returns discrete stream of data for the supplied node. Emits None if node cannot be found or there are no Data available.
     *
     */
-  def dataOf(node:ZkNode):Stream[F,Option[(Chunk.Bytes, ZkStat)]]
+  def dataOf(node:ZkNode):Stream[F,Option[(Chunk[Byte], ZkStat)]]
 
 
 
@@ -99,7 +99,7 @@ trait ZkClient[F[_]] {
     * Sets the data on given ZkNode. If the node does not exists, this evaluates to None.
     * Also yields to None, if supplied version does not matches the version of the node.
     */
-  def setDataOf(node:ZkNode, data:Option[Chunk.Bytes], version:Option[Int]):F[Option[ZkStat]]
+  def setDataOf(node:ZkNode, data:Option[Chunk[Byte]], version:Option[Int]):F[Option[ZkStat]]
 
   /**
     * Sets the access list for the supplied node. Evaluates to None if the node does not exists or
@@ -132,10 +132,10 @@ object ZkClient {
 
   def apply[F[_]](
     ensemble:String
-    , credentials:Option[(String, Chunk.Bytes)]
+    , credentials:Option[(String, Chunk[Byte])]
     , allowReadOnly:Boolean
     , timeout: FiniteDuration
-  )(implicit F: Async[F], R:Run[F]): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = Stream.suspend {
+  )(implicit F: Async[F]): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = Stream.suspend {
 
     Stream.bracket(F.map(async.signalOf(None:Option[ZkClientState.Value])) { signal =>
         signal -> new ZooKeeper(ensemble, timeout.toMillis.toInt, impl.connectionWatcher(signal), allowReadOnly)
@@ -158,7 +158,7 @@ object ZkClient {
       * This emits on Right only if state went to `SyncConnected` or to `ConnectedReadOnly` in case `allowReadOnly` is set to true.
       *
       */
-    def clientStream[F[_]: Async: Run](
+    def clientStream[F[_]: Async](
       allowReadOnly: Boolean
     )(
       signal:Signal[F, Option[ZkClientState.Value]]
@@ -171,14 +171,18 @@ object ZkClient {
       }
     }
 
-    def connectionWatcher[F[_]](signal:Signal[F, Option[ZkClientState.Value]])(implicit R:Run[F]):Watcher = {
+    def connectionWatcher[F[_]](signal:Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F]):Watcher = {
       new Watcher {
         def process(event: WatchedEvent): Unit = {
           event.getType match {
             case EventType.None =>
-              R.unsafeRunAsyncEffects(signal.set(Some(ZkClientState.fromZk(event.getState)))){ err =>
-                Logger.log(Level.SEVERE,s"Failed to signal ZkClient state change: $event", err)
+              F.unsafeRunAsync(signal.set(Some(ZkClientState.fromZk(event.getState)))){ attempt =>
+                attempt.left.map { err =>
+                  Logger.log(Level.SEVERE,s"Failed to signal ZkClient state change: $event", err)
+                }
+                ()
               }
+
             case other =>
               ()
           }
@@ -203,19 +207,19 @@ object ZkClient {
     }
 
 
-    def makeClient[F[_]](zk:ZooKeeper, signal:Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F], R:Run[F]):F[ZkClient[F]] = {
+    def makeClient[F[_]](zk:ZooKeeper, signal:Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F]):F[ZkClient[F]] = {
       F.suspend { F.pure {
         new ZkClient[F] {
           def sessionId: F[Long] = F.suspend(F.pure(zk.getSessionId))
-          def dataNowOf(node: ZkNode): F[Option[(Bytes, ZkStat)]] = impl.dataNowOf(zk,node)
-          def dataOf(node: ZkNode): Stream[F, Option[(Bytes, ZkStat)]] = impl.dataOf(zk,node)
+          def dataNowOf(node: ZkNode): F[Option[(Chunk[Byte], ZkStat)]] = impl.dataNowOf(zk,node)
+          def dataOf(node: ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]] = impl.dataOf(zk,node)
           def setAclOf(node: ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]] = impl.setAclOf(zk,node, acl, version)
-          def setDataOf(node: ZkNode, data: Option[Bytes], version: Option[Int]): F[Option[ZkStat]] = impl.setDataOf(zk, node, data, version)
+          def setDataOf(node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int]): F[Option[ZkStat]] = impl.setDataOf(zk, node, data, version)
           def existsNow(node: ZkNode): F[Option[ZkStat]] = impl.existsNow(zk,node)
           def delete(node: ZkNode, version: Option[Int]): F[Unit] = impl.delete(zk, node, version)
           def atomic(ops: List[ZkOp]): F[List[ZkOpResult]] = impl.atomic(zk,ops)
           def aclOf(node: ZkNode): F[Option[List[ZkACL]]] = impl.aclOf(zk,node)
-          def create(node: ZkNode, createMode: ZkCreateMode, data: Option[Bytes], acl: List[ZkACL]): F[ZkNode] =  impl.create(zk,node,createMode, data, acl)
+          def create(node: ZkNode, createMode: ZkCreateMode, data: Option[Chunk[Byte]], acl: List[ZkACL]): F[ZkNode] =  impl.create(zk,node,createMode, data, acl)
           def exists(node: ZkNode): Stream[F, Option[ZkStat]] = impl.exists(zk,node)
           def childrenOf(node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = impl.childrenOf(zk,node)
           def childrenNowOf(node: ZkNode): F[Option[(List[ZkNode], ZkStat)]] = impl.childrenNowOf(zk,node)
@@ -226,32 +230,32 @@ object ZkClient {
 
 
 
-    def create[F[_]](zk:ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Bytes], acl: List[ZkACL])(implicit F: Async[F]): F[ZkNode] = {
+    def create[F[_]](zk:ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Chunk[Byte]], acl: List[ZkACL])(implicit F: Async[F]): F[ZkNode] = {
       F.map(F.async[String] { cb =>
-        F.suspend(F.pure(zk.create(node.path,data.map(zkData).orNull,fromZkACL(acl), zkCreateMode(createMode), stringCallBack(cb), null)))
+        F.suspend(F.pure(zk.create(node.path,data.map(_.toArray).orNull,fromZkACL(acl), zkCreateMode(createMode), stringCallBack(cb), null)))
       })(ZkNode.apply)
     }
 
-    def dataNowOf[F[_]](zk:ZooKeeper, node:ZkNode)(implicit F: Async[F]):F[Option[(Bytes, ZkStat)]] =
+    def dataNowOf[F[_]](zk:ZooKeeper, node:ZkNode)(implicit F: Async[F]):F[Option[(Chunk[Byte], ZkStat)]] =
       F.async { cb =>
         F.suspend(F.pure(zk.getData(node.path,false, mkDataCallBack(cb), null)))
       }
 
 
-    def dataOf[F[_] :Async : Run](zk:ZooKeeper, node:ZkNode): Stream[F, Option[(Bytes, ZkStat)]] = {
+    def dataOf[F[_] :Async](zk:ZooKeeper, node:ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]] = {
       mkZkStream { case (cb, watcher) =>
         zk.getData(node.path, watcher,mkDataCallBack(cb), null)
       }
     }
 
-    def setDataOf[F[_]](zk:ZooKeeper,node: ZkNode, data: Option[Bytes], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
+    def setDataOf[F[_]](zk:ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
       F.async { cb =>
-        F.suspend { F.pure { zk.setData(node.path, data.map(zkData).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } }
+        F.suspend { F.pure { zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } }
       }
     }
 
 
-    def exists[F[_] :Async :Run](zk:ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] = {
+    def exists[F[_] :Async](zk:ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] = {
       mkZkStream { case (cb,watcher) =>
         zk.exists(node.path, watcher, mkStatCallBack(cb), null)
       }
@@ -263,7 +267,7 @@ object ZkClient {
       }
     }
 
-    def childrenOf[F[_] :Async :Run](zk:ZooKeeper,node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
+    def childrenOf[F[_] :Async](zk:ZooKeeper,node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
       def children:Stream[F, Option[(List[ZkNode], ZkStat)]] =
         mkZkStream { case (cb,watcher) =>
           zk.getChildren(node.path, watcher, mkChildren2CallBack(node)(cb), null)
@@ -310,13 +314,13 @@ object ZkClient {
 
 
 
-    def mkDataCallBack(cb: Either[Throwable,Option[(Bytes, ZkStat)]] => Unit):DataCallback = {
+    def mkDataCallBack(cb: Either[Throwable,Option[(Chunk[Byte], ZkStat)]] => Unit):DataCallback = {
       new  DataCallback {
         def processResult(rc: Int, path: String, ctx: scala.Any, data: Array[Byte], stat: Stat): Unit = {
-          def result:Option[(Bytes, ZkStat)] = {
+          def result:Option[(Chunk[Byte], ZkStat)] = {
             if (data == null) None
             else {
-              Some((new Bytes(data, 0, data.length), zkStats(stat)))
+              Some((Chunk.bytes(data, 0, data.length), zkStats(stat)))
             }
           }
           def failure(err:Either[Throwable,Nothing]):Unit = {
@@ -403,12 +407,12 @@ object ZkClient {
     }
 
 
-    def mkWatcher[F[_]](implicit F:Async[F], R:Run[F]):F[(Watcher, F[Unit])] = {
+    def mkWatcher[F[_]](implicit F:Async[F]):F[(Watcher, F[Unit])] = {
       F.map(F.ref[Unit]){ ref =>
         val watcher = new Watcher {
-          def process(event: WatchedEvent): Unit = { R.unsafeRunAsyncEffects(F.setPure(ref)(()))(_ => ()) }
+          def process(event: WatchedEvent): Unit = { F.unsafeRunAsync(ref.setPure(()))(_ => ()) }
         }
-        watcher -> F.get(ref)
+        watcher -> ref.get
       }
     }
 
@@ -416,9 +420,9 @@ object ZkClient {
 
 
 
-    def mkZkStream[F[_] : Run, CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit)(implicit F: Async[F]):Stream[F,O] = {
+    def mkZkStream[F[_], CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit)(implicit F: Async[F]):Stream[F,O] = {
       def readF:F[(O, F[Unit])] = {
-        F.bind(mkWatcher[F]){ case (watcher, awaitWatch) =>
+        F.flatMap(mkWatcher[F]){ case (watcher, awaitWatch) =>
         F.async[(O, F[Unit])] { cb =>
           F.suspend(F.pure(register({ r => cb(r.right.map(_ -> awaitWatch))}, watcher)))
         }}
@@ -453,9 +457,7 @@ object ZkClient {
       }
     }
 
-    def zkData(data:Bytes):Array[Byte] = {
-      data.values.slice(data.offset, data.size - data.offset)
-    }
+   
 
     def zkStats(stat: Stat):ZkStat = {
       ZkStat(
@@ -484,9 +486,9 @@ object ZkClient {
 
     def toOp(ops:List[ZkOp]):JList[Op] = {
       ops.map {
-        case ZkOp.Create(node, mode, data, acl) => Op.create(node.path,data.map(zkData).orNull,fromZkACL(acl),zkCreateMode(mode))
+        case ZkOp.Create(node, mode, data, acl) => Op.create(node.path,data.map(_.toArray).orNull,fromZkACL(acl),zkCreateMode(mode))
         case ZkOp.Delete(node, version) => Op.delete(node.path, version.getOrElse(-1))
-        case ZkOp.SetData(node, data, version) => Op.setData(node.path, data.map(zkData).orNull, version.getOrElse(-1))
+        case ZkOp.SetData(node, data, version) => Op.setData(node.path, data.map(_.toArray).orNull, version.getOrElse(-1))
         case ZkOp.Check(node, version) => Op.check(node.path, version.getOrElse(-1))
       }.asJava
     }
