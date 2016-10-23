@@ -77,10 +77,6 @@ lazy val publishingSettings = Seq(
   pomIncludeRepository := { _ => false },
   pomExtra := {
     <url>https://github.com/Spinoco/fs2-zk</url>
-    <scm>
-      <url>git@github.com:functional-streams-for-scala/fs2.git</url>
-      <connection>scm:git:git@github.com:Spinoco/fs2-zk.git</connection>
-    </scm>
     <developers>
       {for ((username, name) <- contributors) yield
       <developer>
