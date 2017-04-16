@@ -3,6 +3,9 @@
 
 Simple, yet powerful fs2 bindings for Apache Zookeeper. 
 
+[![Build Status](https://travis-ci.org/Spinoco/fs2-zk.svg?branch=master)](https://travis-ci.org/Spinoco/fs2-zk)
+[![Gitter Chat](https://badges.gitter.im/functional-streams-for-scala/fs2.svg)](https://gitter.im/Spinoco/fs2-zk)
+
 ## Overview
 
 Library reuses Zookeeper client, and wraps fs2 around it allowing some very simple distributed primitives.
