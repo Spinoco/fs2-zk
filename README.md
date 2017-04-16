@@ -1,5 +1,7 @@
 # Apache Zookeeper bindings for fs2 
 
+[![Join the chat at https://gitter.im/Spinoco/fs2-zk](https://badges.gitter.im/Spinoco/fs2-zk.svg)](https://gitter.im/Spinoco/fs2-zk?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 
 Simple, yet powerful fs2 bindings for Apache Zookeeper. 
 
