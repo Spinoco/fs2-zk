@@ -1,13 +1,33 @@
 # Apache Zookeeper bindings for fs2 
 
-Simple library that allws you to consume Apache Zookeeper in program using Functional Streams for Scala (fs2). This wraps around the Appache Zookeeper Client and provides some basic functionality to help you work with Zookeeper easily. 
 
-Library is WIP now, and will be published once stable release of fs2 0.9 will be released. Until then you need to compile master of fs2 locally (currently topic/redesign-run branch) . 
+Simple, yet powerful fs2 bindings for Apache Zookeeper. 
 
-Simple usage :
+## Overview
+
+Library reuses Zookeeper client, and wraps fs2 around it allowing some very simple distributed primitives.
+
+## SBT
+
+Add this to your sbt build file : 
+
+```
+libraryDependencies += "com.spinoco" %% "fs2-zk" % "0.1.5" 
+```
+
+
+### Dependencies 
+
+Library does not have other dependecies than fs2 and zookeepere client itself: 
+
+version  |    scala  |   fs2  |  zookeeper     
+---------|-----------|--------|---------
+0.1.5    | 2.11, 2.12| 0.9.5  | 3.4.10   
+
+## Simple usage 
 
 ```scala 
-import spinoco.fs2.zk.client
+import spinoco.fs2.zk._
 
 // monitor all children of given node 'node1' 
 // by discrete stream of changes 
@@ -15,7 +35,7 @@ client("yourZkConnectString") flatMap { zkc =>
    clientTo(zks) flatMap { zkc => zkc.childrenOf(node1) } 
 }
 
-```
+``` 
 
 More examples you may found in Tests [here](https://github.com/Spinoco/fs2-zk/blob/master/src/test/scala/spinoco/fs2/zk/ZkClientSpec.scala)
 

@@ -13,7 +13,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
 
     val node1 = ZkNode.parse("/n1").get
 
-    def sleep1s = time.sleep[Task](1.second)
+    def sleep1s = time.sleep_[Task](1.second)
 
     "create and delete Node" in {
 

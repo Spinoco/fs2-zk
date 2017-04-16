@@ -40,36 +40,36 @@ trait ZkClient[F[_]] {
     * @param acl            ACLs applied for the node
     * @param createMode     Creation Mode of the node
     */
-  def create(node:ZkNode, createMode:ZkCreateMode, data:Option[Chunk[Byte]], acl:List[ZkACL] ):F[ZkNode]
+  def create(node: ZkNode, createMode: ZkCreateMode, data: Option[Chunk[Byte]], acl: List[ZkACL] ): F[ZkNode]
 
   /**
     * Delete node at given patth. Optionally specify version to delete node if node's version matches supplied version
     */
-  def delete(node:ZkNode, version:Option[Int]):F[Unit]
+  def delete(node: ZkNode, version: Option[Int]): F[Unit]
 
   /**
     * Returns immediately once the check if supplied ZkNode exists at given path is performed at server.
     * Evaluates to Some(stats), if the ZkNode exists or to None, if it does not.
     */
-  def existsNow(node:ZkNode):F[Option[ZkStat]]
+  def existsNow(node: ZkNode): F[Option[ZkStat]]
 
   /**
     * Returns a stream of stats, that may be used to verify whether given node exists or not.
     * Returned stream is discrete, so it only emits when the information is updated (i.e. node added, modified or deleted).
     */
-  def exists(node:ZkNode):Stream[F,Option[ZkStat]]
+  def exists(node: ZkNode): Stream[F, Option[ZkStat]]
 
   /**
     * Returns a node's acl.
     * Evaluates to None, if the node does not exists or to Some(acl) with current acls of the node (possibly empty)
     */
-  def aclOf(node:ZkNode):F[Option[List[ZkACL]]]
+  def aclOf(node: ZkNode): F[Option[List[ZkACL]]]
 
   /**
     * Returns children of given node. Returns immediately once server answers.
     * If the node does not exists  this evaluates to None, otherwise this evaluates to the list of all children, possibly empty
     */
-  def childrenNowOf(node:ZkNode):F[Option[(List[ZkNode], ZkStat)]]
+  def childrenNowOf(node: ZkNode): F[Option[(List[ZkNode], ZkStat)]]
 
   /**
     * Returns a Stream of list of children, of supplied node. This stream is discrete, so it will emit
@@ -78,34 +78,32 @@ trait ZkClient[F[_]] {
     *
     * Note that if node does not exists, this emits None.
     */
-  def childrenOf(node:ZkNode):Stream[F,Option[(List[ZkNode], ZkStat)]]
+  def childrenOf(node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]]
 
 
 
   /**
     * Returns data of the specified node. Possibly evals to None if either node does not exists, or no data are set.
     */
-  def dataNowOf(node:ZkNode):F[Option[(Chunk[Byte], ZkStat)]]
+  def dataNowOf(node: ZkNode): F[Option[(Chunk[Byte], ZkStat)]]
 
   /**
     * Returns discrete stream of data for the supplied node. Emits None if node cannot be found or there are no Data available.
     *
     */
-  def dataOf(node:ZkNode):Stream[F,Option[(Chunk[Byte], ZkStat)]]
-
-
+  def dataOf(node: ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]]
 
   /**
     * Sets the data on given ZkNode. If the node does not exists, this evaluates to None.
     * Also yields to None, if supplied version does not matches the version of the node.
     */
-  def setDataOf(node:ZkNode, data:Option[Chunk[Byte]], version:Option[Int]):F[Option[ZkStat]]
+  def setDataOf(node: ZkNode, data:Option[Chunk[Byte]], version:Option[Int]): F[Option[ZkStat]]
 
   /**
     * Sets the access list for the supplied node. Evaluates to None if the node does not exists or
     * if the supplied version won't match the version of the node.
     */
-  def setAclOf(node:ZkNode, acl:List[ZkACL], version:Option[Int]):F[Option[ZkStat]]
+  def setAclOf(node:ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]]
 
   /**
     * Performs atomic operations. That means either None or all supplied operations will succeed.
@@ -113,7 +111,7 @@ trait ZkClient[F[_]] {
     * @param ops
     * @return
     */
-  def atomic(ops:List[ZkOp]):F[List[ZkOpResult]]
+  def atomic(ops: List[ZkOp]): F[List[ZkOpResult]]
 
   /**
     * Provides stream of client state. This allows fine-tuned monitoring of ZkClient, primarily
@@ -131,9 +129,9 @@ object ZkClient {
 
 
   def apply[F[_]](
-    ensemble:String
-    , credentials:Option[(String, Chunk[Byte])]
-    , allowReadOnly:Boolean
+    ensemble: String
+    , credentials: Option[(String, Chunk[Byte])]
+    , allowReadOnly: Boolean
     , timeout: FiniteDuration
   )(implicit F: Async[F]): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = Stream.suspend {
 
@@ -161,9 +159,9 @@ object ZkClient {
     def clientStream[F[_]: Async](
       allowReadOnly: Boolean
     )(
-      signal:Signal[F, Option[ZkClientState.Value]]
-      , zk:ZooKeeper
-    ):Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = {
+      signal: Signal[F, Option[ZkClientState.Value]]
+      , zk: ZooKeeper
+    ): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = {
       signal.discrete.collectFirst(Function.unlift(identity)) flatMap {
         case ZkClientState.SyncConnected  => eval(makeClient(zk, signal)).map(Right(_))
         case ZkClientState.ConnectedReadOnly if allowReadOnly => eval(makeClient(zk, signal)).map(Right(_))
@@ -171,7 +169,7 @@ object ZkClient {
       }
     }
 
-    def connectionWatcher[F[_]](signal:Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F]):Watcher = {
+    def connectionWatcher[F[_]](signal: Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F]):Watcher = {
       new Watcher {
         def process(event: WatchedEvent): Unit = {
           event.getType match {
@@ -190,7 +188,7 @@ object ZkClient {
       }
     }
 
-    def stringCallBack(cb: Either[Throwable, String] => Unit):StringCallback = {
+    def stringCallBack(cb: Either[Throwable, String] => Unit): StringCallback = {
       new StringCallback {
         def processResult(rc: Int, path: String, ctx: scala.Any, name: String): Unit = {
           zkResult(rc)(cb(Right(name)))(cb)
@@ -198,7 +196,7 @@ object ZkClient {
       }
     }
 
-    def zkResult(rc:Int)(success: => Unit)(failed: Either[Throwable, Nothing] => Unit):Unit = {
+    def zkResult(rc: Int)(success: => Unit)(failed: Either[Throwable, Nothing] => Unit): Unit = {
       KeeperException.Code.get(rc) match {
         case null => failed(Left(new Throwable(s"Unknown Zookeeper result code: $rc")))
         case KeeperException.Code.OK => success
@@ -207,7 +205,7 @@ object ZkClient {
     }
 
 
-    def makeClient[F[_]](zk:ZooKeeper, signal:Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F]):F[ZkClient[F]] = {
+    def makeClient[F[_]](zk:ZooKeeper, signal:Signal[F, Option[ZkClientState.Value]])(implicit F: Async[F]): F[ZkClient[F]] = {
       F.suspend { F.pure {
         new ZkClient[F] {
           def sessionId: F[Long] = F.suspend(F.pure(zk.getSessionId))
@@ -230,49 +228,49 @@ object ZkClient {
 
 
 
-    def create[F[_]](zk:ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Chunk[Byte]], acl: List[ZkACL])(implicit F: Async[F]): F[ZkNode] = {
+    def create[F[_]](zk: ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Chunk[Byte]], acl: List[ZkACL])(implicit F: Async[F]): F[ZkNode] = {
       F.map(F.async[String] { cb =>
         F.suspend(F.pure(zk.create(node.path,data.map(_.toArray).orNull,fromZkACL(acl), zkCreateMode(createMode), stringCallBack(cb), null)))
       })(ZkNode.apply)
     }
 
-    def dataNowOf[F[_]](zk:ZooKeeper, node:ZkNode)(implicit F: Async[F]):F[Option[(Chunk[Byte], ZkStat)]] =
+    def dataNowOf[F[_]](zk: ZooKeeper, node:ZkNode)(implicit F: Async[F]): F[Option[(Chunk[Byte], ZkStat)]] =
       F.async { cb =>
         F.suspend(F.pure(zk.getData(node.path,false, mkDataCallBack(cb), null)))
       }
 
 
-    def dataOf[F[_] :Async](zk:ZooKeeper, node:ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]] = {
+    def dataOf[F[_] :Async](zk: ZooKeeper, node:ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]] = {
       mkZkStream { case (cb, watcher) =>
         zk.getData(node.path, watcher,mkDataCallBack(cb), null)
       }
     }
 
-    def setDataOf[F[_]](zk:ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
+    def setDataOf[F[_]](zk: ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
       F.async { cb =>
         F.suspend { F.pure { zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } }
       }
     }
 
 
-    def exists[F[_] :Async](zk:ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] = {
+    def exists[F[_]: Async](zk:ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] = {
       mkZkStream { case (cb,watcher) =>
         zk.exists(node.path, watcher, mkStatCallBack(cb), null)
       }
     }
 
-    def existsNow[F[_]](zk:ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[ZkStat]] = {
+    def existsNow[F[_]](zk: ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[ZkStat]] = {
       F.async { cb =>
         F.suspend { F.pure { zk.exists(node.path,false,mkStatCallBack(cb),null) }}
       }
     }
 
-    def childrenOf[F[_] :Async](zk:ZooKeeper,node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
+    def childrenOf[F[_]: Async](zk: ZooKeeper, node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
       def children:Stream[F, Option[(List[ZkNode], ZkStat)]] =
         mkZkStream { case (cb,watcher) =>
           zk.getChildren(node.path, watcher, mkChildren2CallBack(node)(cb), null)
         }
-      def go:Stream[F, Option[(List[ZkNode], ZkStat)]] = {
+      def go: Stream[F, Option[(List[ZkNode], ZkStat)]] = {
         children flatMap {
           case None =>
             emit(None) ++ (exists(zk, node).find(_.isDefined) flatMap { _ => go })
@@ -282,31 +280,31 @@ object ZkClient {
       go
     }
 
-    def childrenNowOf[F[_]](zk:ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[(List[ZkNode], ZkStat)]] = {
+    def childrenNowOf[F[_]](zk: ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[(List[ZkNode], ZkStat)]] = {
       F.async { cb =>
         F.suspend { F.pure { zk.getChildren(node.path,false,mkChildren2CallBack(node)(cb), null) }}
       }
     }
 
-    def aclOf[F[_]](zk:ZooKeeper,node: ZkNode)(implicit F: Async[F]): F[Option[List[ZkACL]]] = {
+    def aclOf[F[_]](zk: ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[List[ZkACL]]] = {
       F.async { cb =>
         F.suspend { F.pure { zk.getACL(node.path,null,mkACLCallBack(cb),null) } }
       }
     }
 
-    def setAclOf[F[_]](zk:ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
+    def setAclOf[F[_]](zk: ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int])(implicit F: Async[F]): F[Option[ZkStat]] = {
       F.async { cb =>
-        F.suspend { F.pure { zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1),mkStatCallBack(cb),null)  } }
+        F.suspend { F.pure { zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1), mkStatCallBack(cb),null)  } }
       }
     }
 
-    def delete[F[_]](zk:ZooKeeper, node: ZkNode, version: Option[Int])(implicit F: Async[F]): F[Unit] = {
+    def delete[F[_]](zk: ZooKeeper, node: ZkNode, version: Option[Int])(implicit F: Async[F]): F[Unit] = {
       F.async { cb =>
         F.suspend { F.pure { zk.delete(node.path, version.getOrElse(-1), mkVoidCallBack(cb), null) } }
       }
     }
 
-    def atomic[F[_]](zk:ZooKeeper,ops: List[ZkOp])(implicit F: Async[F]): F[List[ZkOpResult]] = {
+    def atomic[F[_]](zk: ZooKeeper,ops: List[ZkOp])(implicit F: Async[F]): F[List[ZkOpResult]] = {
       F.async { cb =>
         F.suspend { F.pure { zk.multi(toOp(ops),mkMultiCallBack(cb),null) } }
       }
@@ -314,7 +312,7 @@ object ZkClient {
 
 
 
-    def mkDataCallBack(cb: Either[Throwable,Option[(Chunk[Byte], ZkStat)]] => Unit):DataCallback = {
+    def mkDataCallBack(cb: Either[Throwable,Option[(Chunk[Byte], ZkStat)]] => Unit): DataCallback = {
       new  DataCallback {
         def processResult(rc: Int, path: String, ctx: scala.Any, data: Array[Byte], stat: Stat): Unit = {
           def result:Option[(Chunk[Byte], ZkStat)] = {
@@ -334,7 +332,7 @@ object ZkClient {
       }
     }
 
-    def mkStatCallBack(cb: Either[Throwable, Option[ZkStat]] => Unit):StatCallback = {
+    def mkStatCallBack(cb: Either[Throwable, Option[ZkStat]] => Unit): StatCallback = {
       new StatCallback {
         def processResult(rc: Int, path: String, ctx: scala.Any, stat: Stat): Unit = {
           def failure(err:Either[Throwable,Nothing]):Unit = {
@@ -349,7 +347,7 @@ object ZkClient {
     }
 
 
-    def mkChildren2CallBack(parent:ZkNode)(cb: Either[Throwable, Option[(List[ZkNode], ZkStat)]] => Unit):Children2Callback = {
+    def mkChildren2CallBack(parent:ZkNode)(cb: Either[Throwable, Option[(List[ZkNode], ZkStat)]] => Unit): Children2Callback = {
       new Children2Callback {
         def processResult(rc: Int, path: String, ctx: scala.Any, children: JList[String], stat:Stat): Unit = {
           def result:Option[(List[ZkNode], ZkStat)] = {
@@ -389,7 +387,7 @@ object ZkClient {
       }
     }
 
-    def mkVoidCallBack(cb:Either[Throwable, Unit] => Unit):VoidCallback = {
+    def mkVoidCallBack(cb:Either[Throwable, Unit] => Unit): VoidCallback = {
       new VoidCallback {
         def processResult(rc: Int, path: String, ctx: scala.Any): Unit = {
           zkResult(rc)(cb(Right(())))(cb)
@@ -398,7 +396,7 @@ object ZkClient {
     }
 
 
-    def mkMultiCallBack(cb:Either[Throwable, List[ZkOpResult]] => Unit):MultiCallback = {
+    def mkMultiCallBack(cb:Either[Throwable, List[ZkOpResult]] => Unit): MultiCallback = {
       new MultiCallback {
         def processResult(rc: Int, path: String, ctx: scala.Any, opResults: JList[OpResult]): Unit = {
           zkResult(rc)(cb(Right(fromOpResult(opResults))))(cb)
@@ -407,7 +405,7 @@ object ZkClient {
     }
 
 
-    def mkWatcher[F[_]](implicit F:Async[F]):F[(Watcher, F[Unit])] = {
+    def mkWatcher[F[_]](implicit F:Async[F]): F[(Watcher, F[Unit])] = {
       F.map(F.ref[Unit]){ ref =>
         val watcher = new Watcher {
           def process(event: WatchedEvent): Unit = { F.unsafeRunAsync(ref.setPure(()))(_ => ()) }
@@ -420,14 +418,14 @@ object ZkClient {
 
 
 
-    def mkZkStream[F[_], CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit)(implicit F: Async[F]):Stream[F,O] = {
-      def readF:F[(O, F[Unit])] = {
+    def mkZkStream[F[_], CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit)(implicit F: Async[F]): Stream[F,O] = {
+      def readF: F[(O, F[Unit])] = {
         F.flatMap(mkWatcher[F]){ case (watcher, awaitWatch) =>
         F.async[(O, F[Unit])] { cb =>
           F.suspend(F.pure(register({ r => cb(r.right.map(_ -> awaitWatch))}, watcher)))
         }}
       }
-      def go:Stream[F,O] = {
+      def go: Stream[F,O] = {
         eval(readF) flatMap { case (o,awaitWatch) =>
           emit(o) ++ eval_(awaitWatch) ++ go
         }
@@ -445,13 +443,13 @@ object ZkClient {
       }
     }
 
-    def fromZkACL(acls:List[ZkACL]): JList[ACL] = {
+    def fromZkACL(acls: List[ZkACL]): JList[ACL] = {
       acls.map { zkAcl =>
         new ACL(zkAcl.permission.value,new Id(zkAcl.scheme, zkAcl.entity) )
       }.asJava
     }
 
-    def toZkACL(acls:JList[ACL]):List[ZkACL] = {
+    def toZkACL(acls: JList[ACL]): List[ZkACL] = {
       acls.asScala.toList.map { acl =>
         ZkACL(Permission(acl.getPerms),acl.getId.getScheme, acl.getId.getId)
       }
@@ -474,17 +472,17 @@ object ZkClient {
       )
     }
 
-    def fromOpResult(results:JList[OpResult]):List[ZkOpResult] = {
+    def fromOpResult(results: JList[OpResult]): List[ZkOpResult] = {
       results.asScala.toList.map {
-        case create:OpResult.CreateResult => ZkOpResult.CreateResult(create.getPath)
-        case delete:OpResult.DeleteResult => ZkOpResult.DeleteResult
-        case data:OpResult.SetDataResult => ZkOpResult.SetDataResult(zkStats(data.getStat))
-        case checkResult:OpResult.CheckResult => ZkOpResult.CheckResult
+        case create: OpResult.CreateResult => ZkOpResult.CreateResult(create.getPath)
+        case _: OpResult.DeleteResult => ZkOpResult.DeleteResult
+        case data: OpResult.SetDataResult => ZkOpResult.SetDataResult(zkStats(data.getStat))
+        case _: OpResult.CheckResult => ZkOpResult.CheckResult
         case err:OpResult.ErrorResult => ZkOpResult.ErrorResult(err.getErr)
       }
     }
 
-    def toOp(ops:List[ZkOp]):JList[Op] = {
+    def toOp(ops: List[ZkOp]): JList[Op] = {
       ops.map {
         case ZkOp.Create(node, mode, data, acl) => Op.create(node.path,data.map(_.toArray).orNull,fromZkACL(acl),zkCreateMode(mode))
         case ZkOp.Delete(node, version) => Op.delete(node.path, version.getOrElse(-1))
