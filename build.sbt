@@ -29,8 +29,8 @@ lazy val commonSettings = Seq(
     , "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
     //, "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
 
-    , "co.fs2" %% "fs2-core" % "0.9.5"
-    , "co.fs2" %% "fs2-io" % "0.9.5"
+    , "co.fs2" %% "fs2-core" % "0.9.7"
+    , "co.fs2" %% "fs2-io" % "0.9.7"
     , "org.apache.zookeeper" % "zookeeper" % "3.4.10"
 
   ),

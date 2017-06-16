@@ -21,11 +21,13 @@ libraryDependencies += "com.spinoco" %% "fs2-zk" % "0.1.5"
 
 ### Dependencies 
 
-Library does not have other dependecies than fs2 and zookeepere client itself: 
+Library does not have other dependencies than fs2 and zookeeper client itself: 
+
+[Changes](CHANGES.md)
 
 version  |    scala  |   fs2  |  zookeeper     
----------|-----------|--------|---------
-0.1.5    | 2.11, 2.12| 0.9.5  | 3.4.10   
+---------|-----------|--------|--------- 
+0.1.6    | 2.11, 2.12| 0.9.7  | 3.4.10   
 
 ## Simple usage 
 
