@@ -50,7 +50,7 @@ object ZkSpecServer {
         }}
       }
 
-      def cleanup(zkS:ZkSpecServer[F]) : F[Unit] = {
+      def cleanup(zkS:ZkSpecServer[F]): F[Unit] = {
         F.flatMap(zkS.shutdown) { _ => TestUtil.removeRecursively(dataDir) }
       }
 
@@ -116,11 +116,17 @@ object ZkSpecServer {
           new Thread(run,s"fs2-zk-server-standalone-${idx.incrementAndGet()}").start()
         }
 
-
         def shutdown: F[Unit] = F.suspend { F.pure {
           val server = runningServer.get()
           runningServer.set(null)
-          if (server != null)  { server.getServerCnxnFactory.shutdown(); server.shutdown() }
+          if (server != null)  {
+            val cnxnFactory = server.getServerCnxnFactory
+            if (cnxnFactory != null) {
+              server.getServerCnxnFactory.shutdown()
+            }
+
+            server.shutdown()
+          }
         }}
       }
     }
