@@ -1,8 +1,8 @@
 package spinoco.fs2.zk
 
+import cats.effect.IO
 import fs2.Stream._
-import fs2.Task
-import fs2.{Chunk, time}
+import fs2._
 
 import concurrent.duration._
 
@@ -13,15 +13,15 @@ class ZkClientSpec extends Fs2ZkClientSpec {
 
     val node1 = ZkNode.parse("/n1").get
 
-    def sleep1s = time.sleep_[Task](1.second)
+    def sleep1s = Sch.sleep_[IO](1.second)
 
     "create and delete Node" in {
 
       val result =
         standaloneServerAndClient.flatMap { case (zks, zkc) =>
-            eval(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))).map(Right(_)) ++
-            eval(zkc.existsNow(node1)).map(Left(_))
-        }.runLog.unsafeRun
+          eval(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))).map(Right(_)) ++
+          eval(zkc.existsNow(node1)).map(Left(_))
+        }.compile.toVector.unsafeRunSync()
 
       result should have size(2)
       result(0) shouldBe Right(node1)
@@ -43,17 +43,17 @@ class ZkClientSpec extends Fs2ZkClientSpec {
                   sleep1s ++ eval_(zkc.delete(node1, None))
             }
 
-          observe mergeDrainR modify
+          observe concurrently modify
         }
         .map { _.map(_.dataLength) }
-        .take(4).runLog.unsafeTimed(5.seconds).unsafeRun
+        .take(4).compile.toVector.unsafeRunTimed(5.seconds)
 
-      result shouldBe Vector(
+      result shouldBe Some(Vector(
         None
         , Some(0)
         , Some(3)
         , None
-      )
+      ))
 
     }
 
@@ -78,12 +78,12 @@ class ZkClientSpec extends Fs2ZkClientSpec {
                  sleep1s ++ eval_(zkc.delete(node1, None))
              }
 
-           observe mergeDrainR modify
+           observe concurrently modify
          }
          . map { _.map(_._1) }
-         .take(9).runLog.unsafeTimed(10.seconds).unsafeRun
+         .take(9).compile.toVector.unsafeRunTimed(10.seconds)
 
-      result shouldBe Vector(
+      result shouldBe Some(Vector(
         None
         , Some(List.empty)
         , Some(List(nodeA))
@@ -93,7 +93,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
         , Some(List(nodeA))
         , Some(List.empty)
         , None
-      )
+      ))
 
     }
 
@@ -102,18 +102,18 @@ class ZkClientSpec extends Fs2ZkClientSpec {
       val result =
         standaloneServer.flatMap { zks =>
           val observe = clientTo(zks) flatMap { _.clientState }
-          val shutdown = time.sleep[Task](2.seconds) ++ eval_(zks.shutdown)
-          val startup = time.sleep[Task](1.seconds) ++ eval_(zks.startup)
-          observe mergeDrainR (shutdown ++ startup)
+          val shutdown = Sch.sleep[IO](2.seconds) ++ eval_(zks.shutdown)
+          val startup = Sch.sleep[IO](1.seconds) ++ eval_(zks.startup)
+          observe concurrently (shutdown ++ startup)
         }
         .take(3)
-        .runLog.unsafeTimed(10.seconds).unsafeRun
+        .compile.toVector.unsafeRunTimed(10.seconds)
 
-      result shouldBe Vector(
+      result shouldBe Some(Vector(
         ZkClientState.SyncConnected
         , ZkClientState.Disconnected
         , ZkClientState.SyncConnected
-      )
+      ))
     }
 
 

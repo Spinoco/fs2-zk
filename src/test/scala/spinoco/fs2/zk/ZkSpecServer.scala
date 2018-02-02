@@ -6,9 +6,9 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.{Properties, UUID}
 
+import cats.effect.Effect
 import org.apache.zookeeper.server.{ServerCnxnFactory, ServerConfig, ZooKeeperServer}
 import fs2._
-import fs2.util.Async
 import fs2.Stream._
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig
@@ -41,18 +41,17 @@ object ZkSpecServer {
     * @tparam F
     * @return
     */
-  def standalone[F[_]](port:Int = 10000) (implicit F:Async[F]): Stream[F,ZkSpecServer[F]] = {
+  def standalone[F[_]](port:Int = 10000) (implicit F:Effect[F]): Stream[F,ZkSpecServer[F]] = {
     eval(F.suspend(F.pure(Files.createTempDirectory(s"ZK_${UUID.randomUUID()}")))) flatMap { dataDir =>
-      def buildServer: F[ZkSpecServer[F]] = {
-        F.suspend { F.pure {
+      def buildServer: F[ZkSpecServer[F]] =
+        F.delay {
           val props = impl.mkProps(Seq(port), 1, dataDir)
           impl.mkZkServer(impl.mkServerConfig(props))
-        }}
-      }
+        }
 
-      def cleanup(zkS:ZkSpecServer[F]) : F[Unit] = {
+
+      def cleanup(zkS:ZkSpecServer[F]) : F[Unit] =
         F.flatMap(zkS.shutdown) { _ => TestUtil.removeRecursively(dataDir) }
-      }
 
       Stream.bracket(buildServer)(zks => emit(zks), cleanup)
     }
@@ -61,7 +60,7 @@ object ZkSpecServer {
   /**
     * Like `standalone` except it will start the server immediately.
     */
-  def startStandalone[F[_]](port:Int = 10000)(implicit F:Async[F]): Stream[F,ZkSpecServer[F]] = {
+  def startStandalone[F[_]](port:Int = 10000)(implicit F:Effect[F]): Stream[F,ZkSpecServer[F]] = {
     standalone(port).flatMap(zks => eval_(zks.startup) ++ emit(zks))
   }
 
@@ -97,7 +96,7 @@ object ZkSpecServer {
     }
 
 
-    def mkZkServer[F[_]](config: ServerConfig)(implicit F:Async[F]):ZkSpecServer[F] = {
+    def mkZkServer[F[_]](config: ServerConfig)(implicit F:Effect[F]):ZkSpecServer[F] = {
       val idx = new AtomicInteger(0)
       val runningServer = new AtomicReference[ZooKeeperServer]()
       new ZkSpecServer[F] {
@@ -131,7 +130,7 @@ object ZkSpecServer {
       props
     }
 
-    def configureServer[F[_]](config:ServerConfig)(implicit F:Async[F]): F[ZooKeeperServer] = F.suspend { F.pure {
+    def configureServer[F[_]](config:ServerConfig)(implicit F:Effect[F]): F[ZooKeeperServer] = F.delay {
       val zkServer: ZooKeeperServer = new ZooKeeperServer
 
       val txnLog = new FileTxnSnapLog(new File(config.getDataDir), new File(config.getDataLogDir))
@@ -140,7 +139,7 @@ object ZkSpecServer {
       zkServer.setMinSessionTimeout(config.getMinSessionTimeout)
       zkServer.setMaxSessionTimeout(config.getMaxSessionTimeout)
       zkServer
-    }}
+    }
 
 
 

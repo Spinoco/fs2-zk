@@ -8,8 +8,8 @@ lazy val contributors = Seq(
 
 lazy val commonSettings = Seq(
   organization := "com.spinoco",
-  scalaVersion := "2.11.8",
-  crossScalaVersions := Seq("2.11.8", "2.12.1"),
+  scalaVersion := "2.11.12",
+  crossScalaVersions := Seq("2.11.12", "2.12.4"),
   scalacOptions ++= Seq(
     "-feature",
     "-deprecation",
@@ -27,10 +27,10 @@ lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.scalatest" %% "scalatest" % "3.0.0" % "test"
     , "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
-    //, "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
+    , "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
 
-    , "co.fs2" %% "fs2-core" % "0.9.7"
-    , "co.fs2" %% "fs2-io" % "0.9.7"
+    , "co.fs2" %% "fs2-core" % "0.10.0"
+    , "co.fs2" %% "fs2-io" % "0.10.0"
     , "org.apache.zookeeper" % "zookeeper" % "3.4.10"
 
   ),
