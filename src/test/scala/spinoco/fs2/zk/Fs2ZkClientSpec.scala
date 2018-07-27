@@ -1,16 +1,12 @@
 package spinoco.fs2.zk
 
-
-import java.util.concurrent.Executors
-
 import cats.effect.IO
 import fs2.Stream._
 import fs2._
-import fs2.internal.ThreadFactories
 import org.scalatest.concurrent.{Eventually, TimeLimitedTests}
-import org.scalatest.{FreeSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.time.SpanSugar._
+import org.scalatest.{FreeSpec, Matchers}
 
 import scala.concurrent.ExecutionContext
 
@@ -32,7 +28,6 @@ class Fs2ZkClientSpec extends FreeSpec
 
 
   implicit val EC: ExecutionContext = ExecutionContext.global
-  implicit val Sch: Scheduler = Scheduler.fromScheduledExecutorService(Executors.newScheduledThreadPool(4, ThreadFactories.named("scheduler", daemon = true)))
 
   def standaloneServer:Stream[IO, ZkSpecServer[IO]] =
     ZkSpecServer.startStandalone[IO]()

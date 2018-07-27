@@ -53,7 +53,7 @@ object ZkSpecServer {
       def cleanup(zkS:ZkSpecServer[F]) : F[Unit] =
         F.flatMap(zkS.shutdown) { _ => TestUtil.removeRecursively(dataDir) }
 
-      Stream.bracket(buildServer)(zks => emit(zks), cleanup)
+      Stream.bracket(buildServer)(cleanup)
     }
   }
 
