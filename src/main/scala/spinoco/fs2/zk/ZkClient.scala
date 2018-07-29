@@ -1,11 +1,15 @@
 package spinoco.fs2.zk
 
-import cats.syntax.all._
 import java.time.{Instant, LocalDateTime, ZoneId}
 import java.util.logging.Level
+import java.util.{List => JList}
 
-import fs2._
+import cats.effect._
+import cats.effect.concurrent.Deferred
+import cats.syntax.all._
+import cats.{Applicative, Monad}
 import fs2.Stream._
+import fs2._
 import fs2.async.mutable.Signal
 import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.Watcher.Event.EventType
@@ -13,13 +17,8 @@ import org.apache.zookeeper._
 import org.apache.zookeeper.data.{ACL, Id, Stat}
 import spinoco.fs2.zk.ZkACL.Permission
 
-import scala.concurrent.duration.FiniteDuration
 import scala.collection.JavaConverters._
-import java.util.{List => JList}
-
-import cats.effect.{Async, Effect, IO}
-
-import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.FiniteDuration
 import scala.util.Success
 
 
@@ -127,20 +126,16 @@ object ZkClient {
   private val Logger = java.util.logging.Logger.getLogger("ZkClient")
 
 
-  def apply[F[_]](
+  def apply[F[_]: ConcurrentEffect: Timer](
     ensemble: String
     , credentials: Option[(String, Chunk[Byte])]
     , allowReadOnly: Boolean
     , timeout: FiniteDuration
-  )(implicit F: Effect[F], EC: ExecutionContext): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = Stream.suspend {
-
-    Stream.bracket(F.map(async.signalOf(None:Option[ZkClientState.Value])) { signal =>
+  ): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = Stream.suspend {
+    Stream.bracket(Concurrent[F].map(async.signalOf[F, Option[ZkClientState.Value]](None)) { signal =>
         signal -> new ZooKeeper(ensemble, timeout.toMillis.toInt, impl.connectionWatcher(signal), allowReadOnly)
       }
-    )(
-      (impl.clientStream[F](allowReadOnly) _).tupled
-      , { case (_, zk ) => F.suspend(F.pure(zk.close())) }
-    )
+    )({ case (_, zk ) => Concurrent[F].suspend(Concurrent[F].pure(zk.close())) }).flatMap((impl.clientStream[F](allowReadOnly) _).tupled)
   }
 
 
@@ -155,12 +150,12 @@ object ZkClient {
       * This emits on Right only if state went to `SyncConnected` or to `ConnectedReadOnly` in case `allowReadOnly` is set to true.
       *
       */
-    def clientStream[F[_]: Effect](
+    def clientStream[F[_]: ConcurrentEffect: Timer](
       allowReadOnly: Boolean
     )(
       signal: Signal[F, Option[ZkClientState.Value]]
       , zk: ZooKeeper
-    )(implicit EC: ExecutionContext): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = {
+    ): Stream[F, Either[ZkClientState.Value, ZkClient[F]]] = {
       signal.discrete.unNone.take(1) flatMap {
         case ZkClientState.SyncConnected  => eval(makeClient(zk, signal)).map(Right(_))
         case ZkClientState.ConnectedReadOnly if allowReadOnly => eval(makeClient(zk, signal)).map(Right(_))
@@ -200,13 +195,13 @@ object ZkClient {
       }
     }
 
-    def makeClient[F[_]](
+    def makeClient[F[_]: ConcurrentEffect: Timer](
       zk:ZooKeeper
       , signal:Signal[F, Option[ZkClientState.Value]]
-    )(implicit EC: ExecutionContext, F: Effect[F]): F[ZkClient[F]] = {
-      F.delay {
+    ): F[ZkClient[F]] = {
+      Sync[F].delay {
         new ZkClient[F] {
-          def sessionId: F[Long] = F.suspend(F.pure(zk.getSessionId))
+          def sessionId: F[Long] = Sync[F].suspend(Applicative[F].pure(zk.getSessionId))
           def dataNowOf(node: ZkNode): F[Option[(Chunk[Byte], ZkStat)]] = impl.dataNowOf(zk,node)
           def dataOf(node: ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]] = impl.dataOf(zk,node)
           def setAclOf(node: ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]] = impl.setAclOf(zk,node, acl, version)
@@ -224,28 +219,28 @@ object ZkClient {
       }
     }
 
-    def create[F[_]](zk: ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Chunk[Byte]], acl: List[ZkACL])(implicit F: Async[F]): F[ZkNode] = {
-      F.async[String] { cb =>
+    def create[F[_]: Async](zk: ZooKeeper,node: ZkNode, createMode: ZkCreateMode, data: Option[Chunk[Byte]], acl: List[ZkACL]): F[ZkNode] = {
+      Async[F].async[String] { cb =>
         zk.create(node.path,data.map(_.toArray).orNull,fromZkACL(acl), zkCreateMode(createMode), stringCallBack(cb), null)
       } map ZkNode.apply
     }
 
-    def dataNowOf[F[_]](zk: ZooKeeper, node:ZkNode)(implicit F: Async[F]): F[Option[(Chunk[Byte], ZkStat)]] =
-      F.async { cb => zk.getData(node.path,false, mkDataCallBack(cb), null) }
+    def dataNowOf[F[_]: Async](zk: ZooKeeper, node:ZkNode): F[Option[(Chunk[Byte], ZkStat)]] =
+      Async[F].async { cb => zk.getData(node.path,false, mkDataCallBack(cb), null) }
 
-    def dataOf[F[_] : Effect](zk: ZooKeeper, node:ZkNode)(implicit EC: ExecutionContext): Stream[F, Option[(Chunk[Byte], ZkStat)]] =
+    def dataOf[F[_] : ConcurrentEffect](zk: ZooKeeper, node:ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]] =
       mkZkStream { case (cb, watcher) => zk.getData(node.path, watcher, mkDataCallBack(cb), null) }
 
-    def setDataOf[F[_]](zk: ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int])(implicit F: Async[F],  EC: ExecutionContext): F[Option[ZkStat]] =
-      F.async { cb => zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) }
+    def setDataOf[F[_]: Async: Timer](zk: ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int]): F[Option[ZkStat]] =
+      Async[F].async[Option[ZkStat]] { cb => zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } <* Timer[F].shift
 
-    def exists[F[_]: Effect](zk:ZooKeeper, node: ZkNode)(implicit EC: ExecutionContext): Stream[F, Option[ZkStat]] =
+    def exists[F[_]: ConcurrentEffect: Timer](zk: ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] =
       mkZkStream { case (cb,watcher) => zk.exists(node.path, watcher, mkStatCallBack(cb), null) }
 
-    def existsNow[F[_]](zk: ZooKeeper, node: ZkNode)(implicit F: Async[F],  EC: ExecutionContext): F[Option[ZkStat]] =
-      F.async { cb => zk.exists(node.path, false, mkStatCallBack(cb), null) }
+    def existsNow[F[_]: Async: Timer](zk: ZooKeeper, node: ZkNode): F[Option[ZkStat]] =
+      Async[F].async[Option[ZkStat]] { cb => zk.exists(node.path, false, mkStatCallBack(cb), null) } <* Timer[F].shift
 
-    def childrenOf[F[_]: Effect](zk: ZooKeeper, node: ZkNode)(implicit EC: ExecutionContext): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
+    def childrenOf[F[_]: ConcurrentEffect: Timer](zk: ZooKeeper, node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
       def children:Stream[F, Option[(List[ZkNode], ZkStat)]] =
         mkZkStream { case (cb,watcher) =>
           zk.getChildren(node.path, watcher, mkChildren2CallBack(node)(cb), null)
@@ -267,8 +262,8 @@ object ZkClient {
     def aclOf[F[_]](zk: ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[List[ZkACL]]] =
       F.async { cb => zk.getACL(node.path,null,mkACLCallBack(cb),null) }
 
-    def setAclOf[F[_]](zk: ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int])(implicit F: Async[F], EC: ExecutionContext): F[Option[ZkStat]] =
-      F.async { cb => zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1), mkStatCallBack(cb),null)  }
+    def setAclOf[F[_]: Timer : Async](zk: ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]] =
+      Async[F].async[Option[ZkStat]] { cb => zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1), mkStatCallBack(cb),null)  } <* Timer[F].shift
 
     def delete[F[_]](zk: ZooKeeper, node: ZkNode, version: Option[Int])(implicit F: Async[F]): F[Unit] =
       F.async { cb => zk.delete(node.path, version.getOrElse(-1), mkVoidCallBack(cb), null) }
@@ -296,7 +291,7 @@ object ZkClient {
       }
     }
 
-    def mkStatCallBack(cb: Either[Throwable, Option[ZkStat]] => Unit)(implicit EC: ExecutionContext): StatCallback = {
+    def mkStatCallBack(cb: Either[Throwable, Option[ZkStat]] => Unit): StatCallback = {
       new StatCallback {
         def processResult(rc: Int, path: String, ctx: scala.Any, stat: Stat): Unit = {
           def failure(err:Either[Throwable,Nothing]):Unit = {
@@ -305,18 +300,13 @@ object ZkClient {
               case _ => cb(err)
             }
           }
-          EC.execute( new Runnable {
-            def run(): Unit = {
-              zkResult(rc)(cb(Right(Some(zkStats(stat)))))(failure)
-            }
-
-
-          })
+          
+          zkResult(rc)(cb(Right(Some(zkStats(stat)))))(failure)
         }
       }
     }
 
-    def mkChildren2CallBack(parent:ZkNode)(cb: Either[Throwable, Option[(List[ZkNode], ZkStat)]] => Unit): Children2Callback = {
+    def mkChildren2CallBack(parent: ZkNode)(cb: Either[Throwable, Option[(List[ZkNode], ZkStat)]] => Unit): Children2Callback = {
       new Children2Callback {
         def processResult(rc: Int, path: String, ctx: scala.Any, children: JList[String], stat:Stat): Unit = {
           def result:Option[(List[ZkNode], ZkStat)] = {
@@ -371,22 +361,23 @@ object ZkClient {
       }
     }
 
-    def mkWatcher[F[_]](implicit F:Effect[F], EC: ExecutionContext): F[(Watcher, F[Unit])] = {
-      async.promise[F, Unit] map { ref =>
+    def mkWatcher[F[_]: ConcurrentEffect]: F[(Watcher, F[Unit])] = {
+      Deferred[F, Unit].map { ref =>
         val watcher = new Watcher {
-          def process(event: WatchedEvent): Unit = F.runAsync(ref.complete(()))(IO.fromEither).unsafeRunSync()
+          def process(event: WatchedEvent): Unit = Effect[F].runAsync(ref.complete(()))(IO.fromEither).unsafeRunSync()
         }
         watcher -> ref.get
       }
     }
 
-    def mkZkStream[F[_], CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit)(implicit F: Effect[F], EC: ExecutionContext): Stream[F,O] = {
+    def mkZkStream[F[_]: ConcurrentEffect, CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit): Stream[F,O] = {
       def readF: F[(O, F[Unit])] = {
-        F.flatMap(mkWatcher[F]){ case (watcher, awaitWatch) =>
-        F.async[(O, F[Unit])] { cb =>
+        Monad[F].flatMap(mkWatcher[F]){ case (watcher, awaitWatch) =>
+        Async[F].async[(O, F[Unit])] { cb =>
           register({ r => cb(r.right.map(_ -> awaitWatch))}, watcher)
         }}
       }
+
       def go: Stream[F,O] = {
         eval(readF) flatMap { case (o,awaitWatch) =>
           emit(o) ++ eval_(awaitWatch) ++ go

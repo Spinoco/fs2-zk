@@ -13,7 +13,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
 
     val node1 = ZkNode.parse("/n1").get
 
-    def sleep1s = Sch.sleep_[IO](1.second)
+    def sleep1s = Stream.eval_(IO.sleep(1.second))
 
     "create and delete Node" in {
 
@@ -102,8 +102,8 @@ class ZkClientSpec extends Fs2ZkClientSpec {
       val result =
         standaloneServer.flatMap { zks =>
           val observe = clientTo(zks) flatMap { _.clientState }
-          val shutdown = Sch.sleep[IO](2.seconds) ++ eval_(zks.shutdown)
-          val startup = Sch.sleep[IO](1.seconds) ++ eval_(zks.startup)
+          val shutdown = eval_(IO.sleep(2.seconds)) ++ eval_(zks.shutdown)
+          val startup = eval_(IO.sleep(1.seconds)) ++ eval_(zks.startup)
           observe concurrently (shutdown ++ startup)
         }
         .take(3)
