@@ -15,7 +15,7 @@ Library reuses Zookeeper client, and wraps fs2 around it allowing some very simp
 Add this to your sbt build file : 
 
 ```
-libraryDependencies += "com.spinoco" %% "fs2-zk" % "0.1.5" 
+libraryDependencies += "com.spinoco" %% "fs2-zk" % "0.4.0" 
 ```
 
 
@@ -27,7 +27,7 @@ Library does not have other dependencies than fs2 and zookeeper client itself:
 
 version  |    scala  |   fs2  |  zookeeper     
 ---------|-----------|--------|--------- 
-0.4.0-M2    | 2.11, 2.12| 1.0.0-M2 | 3.4.10   
+0.4.0    | 2.11, 2.12| 1.0.0  | 3.4.10   
 0.2.0    | 2.11, 2.12| 0.10.0 | 3.4.10   
 0.1.6    | 2.11, 2.12| 0.9.7  | 3.4.10   
 
