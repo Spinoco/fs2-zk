@@ -23,7 +23,7 @@ lazy val commonSettings = Seq(
     "-Ywarn-unused-import"
   ),
   scalacOptions in (Compile, console) ~= {_.filterNot("-Ywarn-unused-import" == _)},
-  scalacOptions in (Test, console) <<= (scalacOptions in (Compile, console)),
+  scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value,
   libraryDependencies ++= Seq(
     "org.scalatest" %% "scalatest" % "3.0.0" % "test"
     , "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
