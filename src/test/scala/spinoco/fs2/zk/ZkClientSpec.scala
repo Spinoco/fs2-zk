@@ -4,7 +4,7 @@ import cats.effect.IO
 import fs2.Stream._
 import fs2._
 
-import concurrent.duration._
+import scala.concurrent.duration._
 
 class ZkClientSpec extends Fs2ZkClientSpec {
 

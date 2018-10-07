@@ -1,6 +1,6 @@
 package spinoco.fs2.zk
 
-import cats.effect.IO
+import cats.effect.{ContextShift, IO, Timer}
 import fs2.Stream._
 import fs2._
 import org.scalatest.concurrent.{Eventually, TimeLimitedTests}
@@ -27,17 +27,16 @@ class Fs2ZkClientSpec extends FreeSpec
     PropertyCheckConfiguration(minSuccessful = 25, workers = 1)
 
 
-  implicit val EC: ExecutionContext = ExecutionContext.global
+  val EC: ExecutionContext = ExecutionContext.global
+  implicit val cs: ContextShift[IO] = IO.contextShift(EC)
+  implicit val timeout: Timer[IO] = IO.timer(EC)
 
   def standaloneServer:Stream[IO, ZkSpecServer[IO]] =
     ZkSpecServer.startStandalone[IO]()
 
   def clientTo(server:ZkSpecServer[IO]): Stream[IO,ZkClient[IO]] = {
     eval(server.clientAddress) flatMap { address =>
-      client[IO](s"127.0.0.1:${address.getPort}") flatMap {
-        case Left(state) => Stream.raiseError(new Throwable(s"Failed to connect to server: $state"))
-        case Right(zkC) => emit(zkC)
-      }
+      Stream.resource(client[IO](s"127.0.0.1:${address.getPort}"))
     }
   }
 

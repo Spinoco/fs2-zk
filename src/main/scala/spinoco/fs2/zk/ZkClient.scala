@@ -1,16 +1,16 @@
 package spinoco.fs2.zk
 
 import java.time.{Instant, LocalDateTime, ZoneId}
-import java.util.logging.Level
+import java.util.concurrent.atomic.AtomicReference
 import java.util.{List => JList}
 
+import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.Deferred
-import cats.syntax.all._
 import cats.{Applicative, Monad}
 import fs2.Stream._
 import fs2._
-import fs2.async.mutable.Signal
+import fs2.concurrent.{Signal, SignallingRef}
 import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.Watcher.Event.EventType
 import org.apache.zookeeper._
@@ -123,19 +123,24 @@ trait ZkClient[F[_]] {
 
 object ZkClient {
 
-  private val Logger = java.util.logging.Logger.getLogger("ZkClient")
+  @inline def apply[F[_]](implicit instance: ZkClient[F]): ZkClient[F] = instance
 
-
-  def apply[F[_]: ConcurrentEffect: Timer](
+  def instance[F[_]: ConcurrentEffect : ContextShift](
     ensemble: String
     , credentials: Option[(String, Chunk[Byte])]
     , allowReadOnly: Boolean
     , timeout: FiniteDuration
-  ): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] = Stream.suspend {
-    Stream.bracket(Concurrent[F].map(async.signalOf[F, Option[ZkClientState.Value]](None)) { signal =>
-        signal -> new ZooKeeper(ensemble, timeout.toMillis.toInt, impl.connectionWatcher(signal), allowReadOnly)
-      }
-    )({ case (_, zk ) => Concurrent[F].suspend(Concurrent[F].pure(zk.close())) }).flatMap((impl.clientStream[F](allowReadOnly) _).tupled)
+  ): Resource[F, ZkClient[F]] = {
+    def make = {
+      Deferred[F, Signal[F, ZkClientState.Value]].flatMap { deferred =>
+      Sync[F].delay(new ZooKeeper(ensemble, timeout.toMillis.toInt, impl.connectionWatcher(deferred), allowReadOnly)).flatMap { zk =>
+      impl.createClient[F](allowReadOnly)(deferred, zk).map { client =>
+        (zk, client)
+      }}}
+    }
+
+    Resource.make(make)({ case (zk, _) => Sync[F].delay(zk.close()).attempt.void })
+    .flatMap { case (_, client) => Resource.pure(client)  }
   }
 
 
@@ -150,30 +155,46 @@ object ZkClient {
       * This emits on Right only if state went to `SyncConnected` or to `ConnectedReadOnly` in case `allowReadOnly` is set to true.
       *
       */
-    def clientStream[F[_]: ConcurrentEffect: Timer](
+    def createClient[F[_]: ConcurrentEffect: ContextShift](
       allowReadOnly: Boolean
     )(
-      signal: Signal[F, Option[ZkClientState.Value]]
+      signal: Deferred[F, Signal[F, ZkClientState.Value]]
       , zk: ZooKeeper
-    ): Stream[F, Either[ZkClientState.Value, ZkClient[F]]] = {
-      signal.discrete.unNone.take(1) flatMap {
-        case ZkClientState.SyncConnected  => eval(makeClient(zk, signal)).map(Right(_))
-        case ZkClientState.ConnectedReadOnly if allowReadOnly => eval(makeClient(zk, signal)).map(Right(_))
-        case other => Stream(Left(other))
-      }
-    }
+    ): F[ZkClient[F]] =
+      signal.get.flatMap { ref =>
+      ref.get.flatMap {
+        case ZkClientState.SyncConnected  => makeClient(zk, ref)
+        case ZkClientState.ConnectedReadOnly if allowReadOnly => makeClient(zk, ref)
+        case other => Sync[F].raiseError(new InvalidZookeeperState(other))
+      }}
 
-    def connectionWatcher[F[_]](signal: Signal[F, Option[ZkClientState.Value]])(implicit F: Effect[F]):Watcher = {
+
+    def connectionWatcher[F[_] : ConcurrentEffect](deferred: Deferred[F, Signal[F, ZkClientState.Value]]): Watcher = {
       new Watcher {
+        val signal  = new AtomicReference[Option[SignallingRef[F, ZkClientState.Value]]](None)
         def process(event: WatchedEvent): Unit = {
+          // process is somehow complicated, but essentially on the first signal of the state
+          // we create the SignallingRef, and feed it that signal.
+          // Atomic reference is preventing double setting that ref and making sure we get consistent state at the end.
+
           event.getType match {
             case EventType.None =>
-              F.runAsync(signal.set(Some(ZkClientState.fromZk(event.getState))))({
-                case Right(_) => IO.unit
-                case Left(err) => IO { Logger.log(Level.SEVERE,s"Failed to signal ZkClient state change: $event", err) }
-              }).unsafeRunSync()
+              val state  = ZkClientState.fromZk(event.getState)
+              def spin: F[Unit] =
+                signal.get() match {
+                  case None =>
+                    SignallingRef[F, ZkClientState.Value](state).flatMap { ref =>
+                      if (signal.compareAndSet(None, Some(ref))) deferred.complete(ref)
+                      else spin
+                    }
 
-            case other => ()
+                  case Some(ref) =>
+                    ref.set(state)
+                }
+
+              Effect[F].toIO(spin).unsafeRunSync()
+
+            case _ => ()
           }
         }
       }
@@ -195,9 +216,9 @@ object ZkClient {
       }
     }
 
-    def makeClient[F[_]: ConcurrentEffect: Timer](
+    def makeClient[F[_]: ConcurrentEffect: ContextShift](
       zk:ZooKeeper
-      , signal:Signal[F, Option[ZkClientState.Value]]
+      , signal:Signal[F, ZkClientState.Value]
     ): F[ZkClient[F]] = {
       Sync[F].delay {
         new ZkClient[F] {
@@ -214,7 +235,7 @@ object ZkClient {
           def exists(node: ZkNode): Stream[F, Option[ZkStat]] = impl.exists(zk,node)
           def childrenOf(node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = impl.childrenOf(zk,node)
           def childrenNowOf(node: ZkNode): F[Option[(List[ZkNode], ZkStat)]] = impl.childrenNowOf(zk,node)
-          def clientState: Stream[F, ZkClientState.Value] = signal.discrete.collect(Function.unlift(identity))
+          def clientState: Stream[F, ZkClientState.Value] = signal.discrete
         }
       }
     }
@@ -231,16 +252,16 @@ object ZkClient {
     def dataOf[F[_] : ConcurrentEffect](zk: ZooKeeper, node:ZkNode): Stream[F, Option[(Chunk[Byte], ZkStat)]] =
       mkZkStream { case (cb, watcher) => zk.getData(node.path, watcher, mkDataCallBack(cb), null) }
 
-    def setDataOf[F[_]: Async: Timer](zk: ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int]): F[Option[ZkStat]] =
-      Async[F].async[Option[ZkStat]] { cb => zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } <* Timer[F].shift
+    def setDataOf[F[_]: Async: ContextShift](zk: ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int]): F[Option[ZkStat]] =
+      Async[F].async[Option[ZkStat]] { cb => zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } <* implicitly[ContextShift[F]].shift
 
-    def exists[F[_]: ConcurrentEffect: Timer](zk: ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] =
+    def exists[F[_]: ConcurrentEffect](zk: ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] =
       mkZkStream { case (cb,watcher) => zk.exists(node.path, watcher, mkStatCallBack(cb), null) }
 
-    def existsNow[F[_]: Async: Timer](zk: ZooKeeper, node: ZkNode): F[Option[ZkStat]] =
-      Async[F].async[Option[ZkStat]] { cb => zk.exists(node.path, false, mkStatCallBack(cb), null) } <* Timer[F].shift
+    def existsNow[F[_]: Async: ContextShift](zk: ZooKeeper, node: ZkNode): F[Option[ZkStat]] =
+      Async[F].async[Option[ZkStat]] { cb => zk.exists(node.path, false, mkStatCallBack(cb), null) } <* implicitly[ContextShift[F]].shift
 
-    def childrenOf[F[_]: ConcurrentEffect: Timer](zk: ZooKeeper, node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
+    def childrenOf[F[_]: ConcurrentEffect](zk: ZooKeeper, node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
       def children:Stream[F, Option[(List[ZkNode], ZkStat)]] =
         mkZkStream { case (cb,watcher) =>
           zk.getChildren(node.path, watcher, mkChildren2CallBack(node)(cb), null)
@@ -262,8 +283,8 @@ object ZkClient {
     def aclOf[F[_]](zk: ZooKeeper, node: ZkNode)(implicit F: Async[F]): F[Option[List[ZkACL]]] =
       F.async { cb => zk.getACL(node.path,null,mkACLCallBack(cb),null) }
 
-    def setAclOf[F[_]: Timer : Async](zk: ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]] =
-      Async[F].async[Option[ZkStat]] { cb => zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1), mkStatCallBack(cb),null)  } <* Timer[F].shift
+    def setAclOf[F[_]: ContextShift : Async](zk: ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]] =
+      Async[F].async[Option[ZkStat]] { cb => zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1), mkStatCallBack(cb),null)  } <* implicitly[ContextShift[F]].shift
 
     def delete[F[_]](zk: ZooKeeper, node: ZkNode, version: Option[Int])(implicit F: Async[F]): F[Unit] =
       F.async { cb => zk.delete(node.path, version.getOrElse(-1), mkVoidCallBack(cb), null) }

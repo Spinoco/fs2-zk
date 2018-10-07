@@ -1,6 +1,6 @@
 package spinoco.fs2
 
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Resource}
 import fs2._
 
 import scala.concurrent.duration._
@@ -24,12 +24,12 @@ package object zk {
     * @param allowReadOnly    True, indicates that if ensemble loses majority, the client will switch to readonly mode instead
     *                         of failing.
     */
-  def client[F[_]: ConcurrentEffect: Timer](
+  def client[F[_]: ConcurrentEffect: ContextShift](
     ensemble:String
     , credentials:Option[(String, Chunk.Bytes)] = None
     , allowReadOnly:Boolean = false
     , timeout: FiniteDuration = 10.seconds
-  ): Stream[F,Either[ZkClientState.Value, ZkClient[F]]] =
-    ZkClient(ensemble,credentials,allowReadOnly, timeout)
+  ): Resource[F, ZkClient[F]] =
+    ZkClient.instance(ensemble, credentials, allowReadOnly, timeout)
 
 }
