@@ -9,7 +9,7 @@ lazy val contributors = Seq(
 lazy val commonSettings = Seq(
   organization := "com.spinoco",
   scalaVersion := "2.11.12",
-  crossScalaVersions := Seq("2.11.12", "2.12.4"),
+  crossScalaVersions := Seq("2.11.12", "2.12.8"),
   scalacOptions ++= Seq(
     "-feature",
     "-deprecation",
@@ -22,16 +22,17 @@ lazy val commonSettings = Seq(
     "-Ywarn-value-discard",
     "-Ywarn-unused-import"
   ),
-  scalacOptions in (Compile, console) ~= {_.filterNot("-Ywarn-unused-import" == _)},
-  scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value,
+  scalacOptions in(Compile, console) ~= {
+    _.filterNot("-Ywarn-unused-import" == _)
+  },
+  scalacOptions in(Test, console) := (scalacOptions in(Compile, console)).value,
   libraryDependencies ++= Seq(
-    "org.scalatest" %% "scalatest" % "3.0.0" % "test"
-    , "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
-    , "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
-
-    , "co.fs2" %% "fs2-core" % "1.0.0"
-    , "co.fs2" %% "fs2-io" % "1.0.0"
-    , "org.apache.zookeeper" % "zookeeper" % "3.4.10"
+    "org.scalatest" %% "scalatest" % "3.0.0" % Test
+    , "org.scalacheck" %% "scalacheck" % "1.13.4" % Test
+    , "org.slf4j" % "slf4j-simple" % "1.6.1" % Test
+    , "co.fs2" %% "fs2-core" % "1.0.5"
+    , "co.fs2" %% "fs2-io" % "1.0.5"
+    , "org.apache.zookeeper" % "zookeeper" % "3.4.10" exclude("org.slf4j", "slf4j-log4j12")
 
   ),
   scmInfo := Some(ScmInfo(url("https://github.com/Spinoco/fs2-zk"), "git@github.com:Spinoco/fs2-zk.git")),
@@ -51,13 +52,17 @@ lazy val testSettings = Seq(
 )
 
 lazy val scaladocSettings = Seq(
-  scalacOptions in (Compile, doc) ++= Seq(
+  scalacOptions in(Compile, doc) ++= Seq(
     "-doc-source-url", scmInfo.value.get.browseUrl + "/tree/master€{FILE_PATH}.scala",
     "-sourcepath", baseDirectory.in(LocalRootProject).value.getAbsolutePath,
     "-implicits",
     "-implicits-show-all"
   ),
-  scalacOptions in (Compile, doc) ~= { _ filterNot { _ == "-Xfatal-warnings" } },
+  scalacOptions in(Compile, doc) ~= {
+    _ filterNot {
+      _ == "-Xfatal-warnings"
+    }
+  },
   autoAPIMappings := true
 )
 
