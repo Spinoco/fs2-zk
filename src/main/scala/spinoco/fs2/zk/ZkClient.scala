@@ -6,6 +6,7 @@ import java.util.{List => JList}
 
 import cats.implicits._
 import cats.effect._
+import cats.effect.implicits._
 import cats.effect.concurrent.Deferred
 import cats.{Applicative, Monad}
 import fs2.Stream._
@@ -253,13 +254,15 @@ object ZkClient {
       mkZkStream { case (cb, watcher) => zk.getData(node.path, watcher, mkDataCallBack(cb), null) }
 
     def setDataOf[F[_]: Async: ContextShift](zk: ZooKeeper,node: ZkNode, data: Option[Chunk[Byte]], version: Option[Int]): F[Option[ZkStat]] =
-      Async[F].async[Option[ZkStat]] { cb => zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) } <* implicitly[ContextShift[F]].shift
+      Async[F].async[Option[ZkStat]] { cb => zk.setData(node.path, data.map(_.toArray).orNull,version.getOrElse(-1), mkStatCallBack(cb), null) }
+        .guarantee(implicitly[ContextShift[F]].shift)
 
     def exists[F[_]: ConcurrentEffect](zk: ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] =
       mkZkStream { case (cb,watcher) => zk.exists(node.path, watcher, mkStatCallBack(cb), null) }
 
     def existsNow[F[_]: Async: ContextShift](zk: ZooKeeper, node: ZkNode): F[Option[ZkStat]] =
-      Async[F].async[Option[ZkStat]] { cb => zk.exists(node.path, false, mkStatCallBack(cb), null) } <* implicitly[ContextShift[F]].shift
+      Async[F].async[Option[ZkStat]] { cb => zk.exists(node.path, false, mkStatCallBack(cb), null) }
+        .guarantee(implicitly[ContextShift[F]].shift)
 
     def childrenOf[F[_]: ConcurrentEffect](zk: ZooKeeper, node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
       def children:Stream[F, Option[(List[ZkNode], ZkStat)]] =
@@ -284,7 +287,8 @@ object ZkClient {
       F.async { cb => zk.getACL(node.path,null,mkACLCallBack(cb),null) }
 
     def setAclOf[F[_]: ContextShift : Async](zk: ZooKeeper, node: ZkNode, acl: List[ZkACL], version: Option[Int]): F[Option[ZkStat]] =
-      Async[F].async[Option[ZkStat]] { cb => zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1), mkStatCallBack(cb),null)  } <* implicitly[ContextShift[F]].shift
+      Async[F].async[Option[ZkStat]] { cb => zk.setACL(node.path, fromZkACL(acl), version.getOrElse(-1), mkStatCallBack(cb),null)  }
+        .guarantee(implicitly[ContextShift[F]].shift)
 
     def delete[F[_]](zk: ZooKeeper, node: ZkNode, version: Option[Int])(implicit F: Async[F]): F[Unit] =
       F.async { cb => zk.delete(node.path, version.getOrElse(-1), mkVoidCallBack(cb), null) }
