@@ -15,9 +15,9 @@ import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.Watcher.Event.EventType
 import org.apache.zookeeper._
 import org.apache.zookeeper.data.{ACL, Id, Stat}
+import spinoco.fs2.zk.ListConverters.{toScalaList, toJavaList}
 import spinoco.fs2.zk.ZkACL.Permission
 
-import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Success
 
@@ -333,7 +333,7 @@ object ZkClient {
           def result:Option[(List[ZkNode], ZkStat)] = {
             if (children == null) Some(List.empty -> zkStats(stat))
             else {
-              val result = children.asScala.toList.map(parent / _).collect { case Success(zkn) => zkn}
+              val result = toScalaList(children).map(parent / _).collect { case Success(zkn) => zkn }
               Some(result -> zkStats(stat))
             }
           }
@@ -395,7 +395,7 @@ object ZkClient {
       def readF: F[(O, F[Unit])] = {
         Monad[F].flatMap(mkWatcher[F]){ case (watcher, awaitWatch) =>
         Async[F].async[(O, F[Unit])] { cb =>
-          register({ r => cb(r.right.map(_ -> awaitWatch))}, watcher)
+          register({ r => cb(r.map(_ -> awaitWatch))}, watcher)
         }}
       }
 
@@ -417,14 +417,14 @@ object ZkClient {
       }
     }
 
-    def fromZkACL(acls: List[ZkACL]): JList[ACL] = {
+    def fromZkACL(acls: List[ZkACL]): JList[ACL] = toJavaList {
       acls.map { zkAcl =>
         new ACL(zkAcl.permission.value,new Id(zkAcl.scheme, zkAcl.entity) )
-      }.asJava
+      }
     }
 
     def toZkACL(acls: JList[ACL]): List[ZkACL] = {
-      acls.asScala.toList.map { acl =>
+      toScalaList(acls).map { acl =>
         ZkACL(Permission(acl.getPerms),acl.getId.getScheme, acl.getId.getId)
       }
     }
@@ -445,7 +445,7 @@ object ZkClient {
     }
 
     def fromOpResult(results: JList[OpResult]): List[ZkOpResult] = {
-      results.asScala.toList.map {
+      toScalaList(results).map {
         case create: OpResult.CreateResult => ZkOpResult.CreateResult(create.getPath)
         case _: OpResult.DeleteResult => ZkOpResult.DeleteResult
         case data: OpResult.SetDataResult => ZkOpResult.SetDataResult(zkStats(data.getStat))
@@ -454,13 +454,13 @@ object ZkClient {
       }
     }
 
-    def toOp(ops: List[ZkOp]): JList[Op] = {
+    def toOp(ops: List[ZkOp]): JList[Op] = toJavaList {
       ops.map {
         case ZkOp.Create(node, mode, data, acl) => Op.create(node.path,data.map(_.toArray).orNull,fromZkACL(acl),zkCreateMode(mode))
         case ZkOp.Delete(node, version) => Op.delete(node.path, version.getOrElse(-1))
         case ZkOp.SetData(node, data, version) => Op.setData(node.path, data.map(_.toArray).orNull, version.getOrElse(-1))
         case ZkOp.Check(node, version) => Op.check(node.path, version.getOrElse(-1))
-      }.asJava
+      }
     }
 
   }

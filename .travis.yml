@@ -2,7 +2,8 @@ language : scala
 
 scala:
   - 2.11.12
-  - 2.12.4
+  - 2.12.10
+  - 2.13.1
 
 cache:
   directories:
@@ -10,7 +11,8 @@ cache:
   - $HOME/.sbt
 
 jdk:
-  - oraclejdk8
+  - openjdk8
+  - openjdk11
 
 script:
   - sbt ++$TRAVIS_SCALA_VERSION -Dfile.encoding=UTF8 "project fs2-zk" test

@@ -119,7 +119,13 @@ object ZkSpecServer {
         def shutdown: F[Unit] = F.suspend { F.pure {
           val server = runningServer.get()
           runningServer.set(null)
-          if (server != null)  { server.getServerCnxnFactory.shutdown(); server.shutdown() }
+          if (server != null) {
+            val connectionsFactory = server.getServerCnxnFactory
+            if (connectionsFactory != null)
+              connectionsFactory.shutdown()
+
+            server.shutdown()
+          }
         }}
       }
     }

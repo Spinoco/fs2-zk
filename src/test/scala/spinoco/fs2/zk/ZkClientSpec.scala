@@ -46,7 +46,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
           observe concurrently modify
         }
         .map { _.map(_.dataLength) }
-        .take(4).compile.toVector.unsafeRunTimed(5.seconds)
+        .take(4).compile.toVector.unsafeRunTimed(30.seconds)
 
       result shouldBe Some(Vector(
         None
@@ -81,7 +81,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
            observe concurrently modify
          }
          . map { _.map(_._1) }
-         .take(9).compile.toVector.unsafeRunTimed(10.seconds)
+         .take(9).compile.toVector.unsafeRunTimed(30.seconds)
 
       result shouldBe Some(Vector(
         None
@@ -107,7 +107,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
           observe concurrently (shutdown ++ startup)
         }
         .take(3)
-        .compile.toVector.unsafeRunTimed(10.seconds)
+        .compile.toVector.unsafeRunTimed(30.seconds)
 
       result shouldBe Some(Vector(
         ZkClientState.SyncConnected
