@@ -52,6 +52,7 @@ lazy val commonSettings = Seq(
 
 lazy val testSettings = Seq(
   parallelExecution in Test := false,
+  concurrentRestrictions in Global += Tags.limit(Tags.Test, 1),
   testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
   publishArtifact in Test := true
 )

@@ -1,5 +1,7 @@
 package spinoco.fs2.zk
 
+import java.util.concurrent.Executors
+
 import cats.effect.{ContextShift, IO, Timer}
 import fs2.Stream._
 import fs2._
@@ -27,7 +29,7 @@ class Fs2ZkClientSpec extends FreeSpec
     PropertyCheckConfiguration(minSuccessful = 25, workers = 1)
 
 
-  val EC: ExecutionContext = ExecutionContext.global
+  val EC: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))
   implicit val cs: ContextShift[IO] = IO.contextShift(EC)
   implicit val timeout: Timer[IO] = IO.timer(EC)
 
