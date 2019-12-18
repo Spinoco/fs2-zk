@@ -1,5 +1,8 @@
 import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 
+Global / onChangedBuildSource := ReloadOnSourceChanges
+ThisBuild / turbo := true
+
 val ReleaseTag = """^release/([\d\.]+a?)$""".r
 
 lazy val contributors = Seq(
