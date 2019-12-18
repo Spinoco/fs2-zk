@@ -9,7 +9,7 @@ lazy val contributors = Seq(
 lazy val commonSettings = Seq(
   organization := "com.spinoco",
   scalaVersion := "2.11.12",
-  crossScalaVersions := Seq("2.11.12", "2.12.4"),
+  crossScalaVersions := Seq("2.11.12", "2.12.10", "2.13.1"),
   scalacOptions ++= Seq(
     "-feature",
     "-deprecation",
@@ -18,19 +18,25 @@ lazy val commonSettings = Seq(
     "-language:existentials",
     "-language:postfixOps",
     "-Xfatal-warnings",
-    "-Yno-adapted-args",
-    "-Ywarn-value-discard",
-    "-Ywarn-unused-import"
-  ),
+    "-Ywarn-value-discard"
+  ) ++ {
+    if (scalaVersion.value.startsWith("2.13."))
+      Seq.empty
+    else
+      Seq(
+        "-Yno-adapted-args",
+        "-Ywarn-unused-import"
+      )
+  },
   scalacOptions in (Compile, console) ~= {_.filterNot("-Ywarn-unused-import" == _)},
   scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value,
   libraryDependencies ++= Seq(
-    "org.scalatest" %% "scalatest" % "3.0.0" % "test"
-    , "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
-    , "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
+    "org.scalatest" %% "scalatest" % "3.0.8" % "test"
+    , "org.scalacheck" %% "scalacheck" % "1.14.2" % "test"
+    , "org.slf4j" % "slf4j-simple" % "1.7.28" % "test" // uncomment this for logs when testing
 
-    , "co.fs2" %% "fs2-core" % "1.0.0"
-    , "co.fs2" %% "fs2-io" % "1.0.0"
+    , "co.fs2" %% "fs2-core" % "2.0.1"
+    , "co.fs2" %% "fs2-io" % "2.0.1"
     , "org.apache.zookeeper" % "zookeeper" % "3.4.10"
 
   ),
@@ -46,6 +52,7 @@ lazy val commonSettings = Seq(
 
 lazy val testSettings = Seq(
   parallelExecution in Test := false,
+  concurrentRestrictions in Global += Tags.limit(Tags.Test, 1),
   testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
   publishArtifact in Test := true
 )
@@ -109,7 +116,7 @@ lazy val `fs2-zk` =
   .settings(commonSettings)
   .settings(
    name := "fs2-zk"
-  ) 
- 
- 
+  )
+
+
 

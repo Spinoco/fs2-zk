@@ -1,12 +1,14 @@
 package spinoco.fs2.zk
 
+import java.util.concurrent.Executors
+
 import cats.effect.{ContextShift, IO, Timer}
 import fs2.Stream._
 import fs2._
 import org.scalatest.concurrent.{Eventually, TimeLimitedTests}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.time.SpanSugar._
 import org.scalatest.{FreeSpec, Matchers}
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 import scala.concurrent.ExecutionContext
 
@@ -14,7 +16,7 @@ import scala.concurrent.ExecutionContext
   * Created by pach on 14/05/16.
   */
 class Fs2ZkClientSpec extends FreeSpec
-  with GeneratorDrivenPropertyChecks
+  with ScalaCheckDrivenPropertyChecks
   with Matchers
   with TimeLimitedTests
   with Eventually {
@@ -27,7 +29,7 @@ class Fs2ZkClientSpec extends FreeSpec
     PropertyCheckConfiguration(minSuccessful = 25, workers = 1)
 
 
-  val EC: ExecutionContext = ExecutionContext.global
+  val EC: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))
   implicit val cs: ContextShift[IO] = IO.contextShift(EC)
   implicit val timeout: Timer[IO] = IO.timer(EC)
 
