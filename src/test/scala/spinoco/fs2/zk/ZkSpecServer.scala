@@ -1,6 +1,5 @@
 package spinoco.fs2.zk
 
-import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -133,7 +132,7 @@ object ZkSpecServer {
     def configureServer[F[_]](config:ServerConfig)(implicit F:Effect[F]): F[ZooKeeperServer] = F.delay {
       val zkServer: ZooKeeperServer = new ZooKeeperServer
 
-      val txnLog = new FileTxnSnapLog(new File(config.getDataDir), new File(config.getDataLogDir))
+      val txnLog = new FileTxnSnapLog(config.getDataDir, config.getDataLogDir)
       zkServer.setTxnLogFactory(txnLog)
       zkServer.setTickTime(config.getTickTime)
       zkServer.setMinSessionTimeout(config.getMinSessionTimeout)
