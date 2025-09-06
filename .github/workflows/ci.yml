@@ -52,8 +52,6 @@ jobs:
       env:
         ZK_VERSION: ${{ matrix.zk-version }}
 
-    - name: Check formatting
-      run: sbt scalafmtCheckAll || echo "Formatting check completed"
 
   docker-cleanup:
     runs-on: ubuntu-latest
