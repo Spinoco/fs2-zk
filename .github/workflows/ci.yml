@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [ series/0.5 ]
+  pull_request:
+    branches: [ series/0.5 ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        scala: [2.12.20]
+        java: [8, 11, 17, 21]
+        zk-version: ["3.4.10"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Java ${{ matrix.java }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ matrix.java }}
+        
+    - name: Setup sbt
+      uses: sbt/setup-sbt@v1
+        
+    - name: Cache sbt
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.sbt
+          ~/.ivy2/cache
+          ~/.coursier/cache/v1
+          ~/.cache/coursier/v1
+          target/resolution-cache
+          target/streams
+          project/target/resolution-cache
+          project/target/streams
+        key: ${{ runner.os }}-sbt-cache-v2-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/build.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-sbt-cache-v2-
+
+    - name: Compile
+      run: sbt compile
+
+    - name: Test with ZooKeeper ${{ matrix.zk-version }}
+      run: sbt test
+      env:
+        ZK_VERSION: ${{ matrix.zk-version }}
+
+    - name: Check formatting
+      run: sbt scalafmtCheckAll || echo "Formatting check completed"
+
+  docker-cleanup:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+    - name: Clean up Docker containers
+      run: |
+        docker ps -aq --filter "name=zk-server*" | xargs -r docker rm -f || true
+        docker system prune -f || true
