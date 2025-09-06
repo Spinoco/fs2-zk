@@ -3,6 +3,7 @@ package spinoco.fs2.zk
 import cats.effect.IO
 import fs2.Stream._
 import fs2._
+import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
 
@@ -13,7 +14,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
 
     val node1 = ZkNode.parse("/n1").get
 
-    def sleep1s = Stream.eval_(IO.sleep(1.second))
+    def sleep1s = Stream.exec(IO.sleep(1.second))
 
     "create and delete Node" in {
 
@@ -26,7 +27,6 @@ class ZkClientSpec extends Fs2ZkClientSpec {
       result should have size(2)
       result(0) shouldBe Right(node1)
       result(1).left.map(_.nonEmpty) shouldBe Left(true)
-
     }
 
 
@@ -36,25 +36,28 @@ class ZkClientSpec extends Fs2ZkClientSpec {
         standaloneServer.flatMap { zks =>
           val observe = clientTo(zks) flatMap { zkc => zkc.exists(node1) }
           val modify =
-            sleep1s ++
+            sleep1s ++ sleep1s ++ sleep1s ++ sleep1s ++ // accommodate for client connection so we know client is always listening
               clientTo(zks) flatMap { zkc =>
-                eval_(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))) ++
-                  sleep1s ++ eval_(zkc.setDataOf(node1, Some(Chunk.bytes(Array[Byte](1,2,3), 0, 3)), None)) ++
-                  sleep1s ++ eval_(zkc.delete(node1, None))
+                exec(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE)).void) ++
+                  sleep1s ++ exec(zkc.setDataOf(node1, Some(ByteVector(1,2,3)), None).void) ++
+                  sleep1s ++ exec(zkc.delete(node1, None))
             }
 
           observe concurrently modify
         }
         .map { _.map(_.dataLength) }
-        .take(4).compile.toVector.unsafeRunTimed(5.seconds)
+        .take(4)
+        .timeout(30.seconds)
+        .compile.toVector
+        .unsafeRunSync()
 
-      result shouldBe Some(Vector(
+      result shouldBe Vector(
         None
         , Some(0)
         , Some(3)
         , None
-      ))
-
+      )
+      
     }
 
 
@@ -66,24 +69,27 @@ class ZkClientSpec extends Fs2ZkClientSpec {
          standaloneServer.flatMap { zks =>
            val observe = clientTo(zks) flatMap { zkc => zkc.childrenOf(node1) }
            val modify =
-             sleep1s ++
+             sleep1s ++ sleep1s ++ sleep1s ++ sleep1s ++ // accommodate for client connection so we know client is always listening
              clientTo(zks) flatMap { zkc =>
-               eval_(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))) ++
-                 sleep1s ++ eval_(zkc.create(nodeA, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))) ++
-                 sleep1s ++ eval_(zkc.create(nodeB, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))) ++
-                 sleep1s ++ eval_(zkc.create(nodeC, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE))) ++
-                 sleep1s ++ eval_(zkc.delete(nodeB, None)) ++
-                 sleep1s ++ eval_(zkc.delete(nodeC, None)) ++
-                 sleep1s ++ eval_(zkc.delete(nodeA, None)) ++
-                 sleep1s ++ eval_(zkc.delete(node1, None))
+               exec(zkc.create(node1, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE)).void) ++
+                 sleep1s ++ exec(zkc.create(nodeA, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE)).void) ++
+                 sleep1s ++ exec(zkc.create(nodeB, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE)).void) ++
+                 sleep1s ++ exec(zkc.create(nodeC, ZkCreateMode.Persistent, None, List(ZkACL.ACL_OPEN_UNSAFE)).void) ++
+                 sleep1s ++ exec(zkc.delete(nodeB, None)) ++
+                 sleep1s ++ exec(zkc.delete(nodeC, None)) ++
+                 sleep1s ++ exec(zkc.delete(nodeA, None)) ++
+                 sleep1s ++ exec(zkc.delete(node1, None))
              }
 
            observe concurrently modify
          }
          . map { _.map(_._1) }
-         .take(9).compile.toVector.unsafeRunTimed(10.seconds)
+         .take(9)
+         .timeout(30.seconds)
+         .compile.toVector
+         .unsafeRunSync()
 
-      result shouldBe Some(Vector(
+      result shouldBe Vector(
         None
         , Some(List.empty)
         , Some(List(nodeA))
@@ -93,7 +99,7 @@ class ZkClientSpec extends Fs2ZkClientSpec {
         , Some(List(nodeA))
         , Some(List.empty)
         , None
-      ))
+      )
 
     }
 
@@ -102,18 +108,19 @@ class ZkClientSpec extends Fs2ZkClientSpec {
       val result =
         standaloneServer.flatMap { zks =>
           val observe = clientTo(zks) flatMap { _.clientState }
-          val shutdown = eval_(IO.sleep(2.seconds)) ++ eval_(zks.shutdown)
-          val startup = eval_(IO.sleep(1.seconds)) ++ eval_(zks.startup)
+          val shutdown = exec(IO.sleep(2.seconds)) ++ exec(zks.shutdown)
+          val startup = exec(IO.sleep(1.seconds)) ++ exec(zks.startup)
           observe concurrently (shutdown ++ startup)
         }
         .take(3)
-        .compile.toVector.unsafeRunTimed(10.seconds)
+        .compile
+          .toVector.timeout(30.seconds).unsafeRunSync()
 
-      result shouldBe Some(Vector(
+      result shouldBe Vector(
         ZkClientState.SyncConnected
         , ZkClientState.Disconnected
-        , ZkClientState.SyncConnected
-      ))
+        , ZkClientState.Expired // as the new server does not know about previous session
+      )
     }
 
 

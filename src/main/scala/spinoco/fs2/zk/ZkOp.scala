@@ -1,6 +1,6 @@
 package spinoco.fs2.zk
 
-import fs2.Chunk
+import scodec.bits.ByteVector
 
 
 object ZkOp {
@@ -13,7 +13,7 @@ object ZkOp {
     * @param acl            ACLs applied for the node
     * @param createMode     Creation Mode of the node
     */
-  case class Create(node:ZkNode, createMode:ZkCreateMode, data:Option[Chunk.Bytes], acl:List[ZkACL]) extends ZkOp
+  case class Create(node:ZkNode, createMode:ZkCreateMode, data:Option[ByteVector], acl:List[ZkACL]) extends ZkOp
 
   /**
     * Deletes given node
@@ -23,7 +23,7 @@ object ZkOp {
   /**
     * Sets data on given node
     */
-  case class SetData(node:ZkNode, data:Option[Chunk.Bytes], version:Option[Int]) extends ZkOp
+  case class SetData(node:ZkNode, data:Option[ByteVector], version:Option[Int]) extends ZkOp
 
   /**
     * Performs check that given node is of supplied version

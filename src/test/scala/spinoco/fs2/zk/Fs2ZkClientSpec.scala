@@ -1,6 +1,7 @@
 package spinoco.fs2.zk
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
+import cats.effect.unsafe.IORuntime
 import fs2.Stream._
 import fs2._
 import org.scalatest.concurrent.{Eventually, TimeLimitedTests}
@@ -8,7 +9,6 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.time.SpanSugar._
 import org.scalatest.{FreeSpec, Matchers}
 
-import scala.concurrent.ExecutionContext
 
 /**
   * Created by pach on 14/05/16.
@@ -19,6 +19,8 @@ class Fs2ZkClientSpec extends FreeSpec
   with TimeLimitedTests
   with Eventually {
 
+  implicit def global: IORuntime = IORuntime.global
+
   val timeLimit = 90.seconds
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = timeLimit)
@@ -26,17 +28,12 @@ class Fs2ZkClientSpec extends FreeSpec
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 25, workers = 1)
 
-
-  val EC: ExecutionContext = ExecutionContext.global
-  implicit val cs: ContextShift[IO] = IO.contextShift(EC)
-  implicit val timeout: Timer[IO] = IO.timer(EC)
-
   def standaloneServer:Stream[IO, ZkSpecServer[IO]] =
     ZkSpecServer.startStandalone[IO]()
 
   def clientTo(server:ZkSpecServer[IO]): Stream[IO,ZkClient[IO]] = {
     eval(server.clientAddress) flatMap { address =>
-      Stream.resource(client[IO](s"127.0.0.1:${address.getPort}"))
+      Stream.resource(ZkClient.instance[IO](s"127.0.0.1:${address.getPort}"))
     }
   }
 

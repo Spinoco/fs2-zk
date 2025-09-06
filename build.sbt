@@ -1,4 +1,3 @@
-import com.typesafe.sbt.pgp.PgpKeys.publishSigned
 
 val ReleaseTag = """^release/([\d\.]+a?)$""".r
 
@@ -8,8 +7,8 @@ lazy val contributors = Seq(
 
 lazy val commonSettings = Seq(
   organization := "com.spinoco",
-  scalaVersion := "2.11.12",
-  crossScalaVersions := Seq("2.11.12", "2.12.4"),
+  scalaVersion := "2.12.20",
+  crossScalaVersions := Seq("2.12.20"),
   scalacOptions ++= Seq(
     "-feature",
     "-deprecation",
@@ -28,10 +27,9 @@ lazy val commonSettings = Seq(
     "org.scalatest" %% "scalatest" % "3.0.0" % "test"
     , "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
     , "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
-
-    , "co.fs2" %% "fs2-core" % "1.0.0"
-    , "co.fs2" %% "fs2-io" % "1.0.0"
-    , "org.apache.zookeeper" % "zookeeper" % "3.4.10"
+    , "co.fs2" %% "fs2-core" % "3.12.2"
+    , "co.fs2" %% "fs2-io" % "3.12.2"
+    , "org.apache.zookeeper" % "zookeeper" % "3.4.14"
 
   ),
   scmInfo := Some(ScmInfo(url("https://github.com/Spinoco/fs2-zk"), "git@github.com:Spinoco/fs2-zk.git")),
