@@ -29,7 +29,7 @@ lazy val commonSettings = Seq(
     , "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
     , "co.fs2" %% "fs2-core" % "3.12.2"
     , "co.fs2" %% "fs2-io" % "3.12.2"
-    , "org.apache.zookeeper" % "zookeeper" % "3.4.14"
+    , "org.apache.zookeeper" % "zookeeper" % "3.9.4"
 
   ),
   scmInfo := Some(ScmInfo(url("https://github.com/Spinoco/fs2-zk"), "git@github.com:Spinoco/fs2-zk.git")),

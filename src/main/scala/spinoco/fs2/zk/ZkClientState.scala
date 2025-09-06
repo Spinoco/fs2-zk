@@ -12,6 +12,7 @@ object ZkClientState extends Enumeration {
       , ConnectedReadOnly
       , SASLAuthenticated
       , Expired
+      , Closed
       = Value
 
   def fromZk(s:KeeperState):ZkClientState.Value = {
@@ -22,6 +23,7 @@ object ZkClientState extends Enumeration {
       case KeeperState.ConnectedReadOnly => ConnectedReadOnly
       case KeeperState.SaslAuthenticated => SASLAuthenticated
       case KeeperState.Expired => Expired
+      case KeeperState.Closed => Closed
     }
   }
 }
