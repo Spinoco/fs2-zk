@@ -7,25 +7,38 @@ lazy val contributors = Seq(
 
 lazy val commonSettings = Seq(
   organization := "com.spinoco",
-  scalaVersion := "2.12.20",
-  crossScalaVersions := Seq("2.12.20"),
-  scalacOptions ++= Seq(
-    "-feature",
-    "-deprecation",
-    "-language:implicitConversions",
-    "-language:higherKinds",
-    "-language:existentials",
-    "-language:postfixOps",
-    "-Xfatal-warnings",
-    "-Yno-adapted-args",
-    "-Ywarn-value-discard",
-    "-Ywarn-unused-import"
-  ),
-  Compile / console / scalacOptions ~= {_.filterNot("-Ywarn-unused-import" == _)},
+  scalaVersion := "2.13.16",
+  crossScalaVersions := Seq("2.12.20", "2.13.16"),
+  scalacOptions ++= {
+    val commonOptions = Seq(
+      "-feature",
+      "-deprecation",
+      "-language:implicitConversions",
+      "-language:higherKinds",
+      "-language:existentials",
+      "-language:postfixOps",
+      "-Xfatal-warnings"
+    )
+    if (scalaVersion.value.startsWith("2.12")) {
+      commonOptions ++ Seq(
+        "-Yno-adapted-args",
+        "-Ywarn-value-discard",
+        "-Ywarn-unused-import"
+      )
+    } else {
+      commonOptions ++ Seq(
+        "-Wvalue-discard",
+        "-Wunused:imports",
+        "-Wconf:cat=deprecation&msg=JavaConverters:s"
+      )
+    }
+  },
+  Compile / console / scalacOptions ~= {opts => opts.filterNot(Set("-Ywarn-unused-import", "-Wunused:imports").contains)},
   Test / console / scalacOptions := (Compile / console / scalacOptions).value,
   libraryDependencies ++= Seq(
-    "org.scalatest" %% "scalatest" % "3.0.0" % "test"
-    , "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
+    "org.scalatest" %% "scalatest" % "3.2.19" % "test"
+    , "org.scalacheck" %% "scalacheck" % "1.18.1" % "test"
+    , "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % "test"
     , "org.slf4j" % "slf4j-simple" % "1.6.1" % "test" // uncomment this for logs when testing
     , "co.fs2" %% "fs2-core" % "3.12.2"
     , "co.fs2" %% "fs2-io" % "3.12.2"

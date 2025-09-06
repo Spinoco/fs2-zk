@@ -12,7 +12,7 @@ jobs:
     
     strategy:
       matrix:
-        scala: [2.12.20]
+        scala: [2.12.20, 2.13.16]
         java: [8, 11, 17, 21]
         zk-version: ["3.4.10"]
 
@@ -45,10 +45,10 @@ jobs:
           ${{ runner.os }}-sbt-cache-v2-
 
     - name: Compile
-      run: sbt compile
+      run: sbt ++${{ matrix.scala }} compile
 
     - name: Test with ZooKeeper ${{ matrix.zk-version }}
-      run: sbt test
+      run: sbt ++${{ matrix.scala }} test
       env:
         ZK_VERSION: ${{ matrix.zk-version }}
 

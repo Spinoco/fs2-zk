@@ -5,16 +5,15 @@ import cats.effect.unsafe.IORuntime
 import fs2.Stream._
 import fs2._
 import org.scalatest.concurrent.{Eventually, TimeLimitedTests}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.time.SpanSugar._
-import org.scalatest.{FreeSpec, Matchers}
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 
 
 /**
   * Created by pach on 14/05/16.
   */
-class Fs2ZkClientSpec extends FreeSpec
-  with GeneratorDrivenPropertyChecks
+class Fs2ZkClientSpec extends AnyFreeSpec
   with Matchers
   with TimeLimitedTests
   with Eventually {
@@ -24,9 +23,6 @@ class Fs2ZkClientSpec extends FreeSpec
   val timeLimit = 90.seconds
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = timeLimit)
-
-  implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = 25, workers = 1)
 
   def standaloneServer:Stream[IO, ZkSpecServer[IO]] =
     ZkSpecServer.startStandalone[IO]()
