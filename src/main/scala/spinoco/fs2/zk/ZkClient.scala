@@ -1,14 +1,10 @@
 package spinoco.fs2.zk
 
-import java.time.{Instant, LocalDateTime, ZoneId}
-import java.util.concurrent.atomic.AtomicReference
-import java.util.{List => JList}
-
-import cats.implicits._
+import cats.Monad
 import cats.data.OptionT
 import cats.effect._
-import cats.effect.{Deferred, IO}
-import cats.Monad
+import cats.effect.std.Dispatcher
+import cats.implicits._
 import fs2.Stream._
 import fs2._
 import fs2.concurrent.{Signal, SignallingRef}
@@ -16,12 +12,15 @@ import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.Watcher.Event.EventType
 import org.apache.zookeeper._
 import org.apache.zookeeper.data.{ACL, Id, Stat}
+import scodec.bits.ByteVector
 import spinoco.fs2.zk.ZkACL.Permission
 
-import scala.collection.JavaConverters._
+import java.time.{Instant, LocalDateTime, ZoneId}
+import java.util.concurrent.atomic.AtomicReference
+import java.util.{List => JList}
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util.Success
-import scodec.bits.ByteVector
 
 
 trait ZkClient[F[_]] {
@@ -130,10 +129,7 @@ object ZkClient {
   /**
    * Creates a zookeeper client. Typically, the application has only one client available.
    *
-   * This Stream emits only once providing guarded ZkClient, after session was successfully established.
-   * It may also emit on Left when connection was not established to the server.
-   *
-   * Note that there is no specific `close` functionality. The client is terminated when the resulting Stream terminates.
+   * Note that there is no specific `close` functionality. The client is terminated when the resulting resource releases.
    *
    * @param ensemble         Zookeeper ensemble Uri .i.e. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002"
    *                         or "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002/app/a" if chrooted under /app/a
@@ -143,11 +139,11 @@ object ZkClient {
    */
   def instance[F[_]: Async](
     ensemble: String
-    , credentials:Option[(String, ByteVector)] = None
-    , allowReadOnly:Boolean = false
+    , credentials: Option[(String, ByteVector)] = None
+    , allowReadOnly: Boolean = false
     , timeout: FiniteDuration = 10.seconds
   ): Resource[F, ZkClient[F]] = {
-    def make = {
+    def make(implicit d: Dispatcher[F]) = {
       Deferred[F, Signal[F, ZkClientState.Value]].flatMap { deferred =>
       Sync[F].delay(new ZooKeeper(ensemble, timeout.toMillis.toInt, impl.connectionWatcher(deferred), allowReadOnly)).flatMap { zk =>
         val authF = OptionT.fromOption[F](credentials)
@@ -160,10 +156,15 @@ object ZkClient {
       }}
     }
 
-    Resource.make(make)({ case (zk, _) => Sync[F].delay(zk.close()).attempt.void })
-    .map { case (_, client) => client }
+    Dispatcher.parallel.flatMap { implicit dispatcher =>
+      Resource.make(make)({ case (zk, _) =>
+        // We are releasing the resource, close the client,
+        // We can ignore any errors on close as we are closing anyway.
+        Sync[F].delay(zk.close()).attempt.void
+      })
+      .map { case (_, client) => client }
+    }
   }
-
 
   object impl {
 
@@ -176,7 +177,7 @@ object ZkClient {
       * This emits on Right only if state went to `SyncConnected` or to `ConnectedReadOnly` in case `allowReadOnly` is set to true.
       *
       */
-    def createClient[F[_]: Async](
+    def createClient[F[_]: Async: Dispatcher](
       allowReadOnly: Boolean
     )(
       signal: Deferred[F, Signal[F, ZkClientState.Value]]
@@ -190,7 +191,7 @@ object ZkClient {
       }}
 
 
-    def connectionWatcher[F[_] : Async](deferred: Deferred[F, Signal[F, ZkClientState.Value]]): Watcher = {
+    def connectionWatcher[F[_] : Async: Dispatcher](deferred: Deferred[F, Signal[F, ZkClientState.Value]]): Watcher = {
       new Watcher {
         val signal  = new AtomicReference[Option[SignallingRef[F, ZkClientState.Value]]](None)
         def process(event: WatchedEvent): Unit = {
@@ -213,9 +214,7 @@ object ZkClient {
                     ref.set(state)
                 }
 
-              // Note: Using unsafeRunAsync for fire-and-forget semantics in watcher callbacks
-              // Need to cast to IO for unsafe operations
-              (spin.asInstanceOf[IO[Unit]]).unsafeRunAsync(_ => ())(cats.effect.unsafe.implicits.global)
+              implicitly[Dispatcher[F]].unsafeRunAndForget(spin)
 
             case _ => ()
           }
@@ -239,7 +238,7 @@ object ZkClient {
       }
     }
 
-    def makeClient[F[_]: Async](
+    def makeClient[F[_]: Async: Dispatcher](
       zk:ZooKeeper
       , signal:Signal[F, ZkClientState.Value]
     ): F[ZkClient[F]] = {
@@ -280,7 +279,7 @@ object ZkClient {
         }
       }
 
-    def dataOf[F[_] : Async](zk: ZooKeeper, node:ZkNode): Stream[F, Option[(ByteVector, ZkStat)]] =
+    def dataOf[F[_] : Async: Dispatcher](zk: ZooKeeper, node:ZkNode): Stream[F, Option[(ByteVector, ZkStat)]] =
       mkZkStream { case (cb, watcher) => zk.getData(node.path, watcher, mkDataCallBack(cb), null) }
 
     def setDataOf[F[_]: Async](zk: ZooKeeper,node: ZkNode, data: Option[ByteVector], version: Option[Int]): F[Option[ZkStat]] =
@@ -291,7 +290,7 @@ object ZkClient {
         }
       }
 
-    def exists[F[_]: Async](zk: ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] =
+    def exists[F[_]: Async: Dispatcher](zk: ZooKeeper, node: ZkNode): Stream[F, Option[ZkStat]] =
       mkZkStream { case (cb,watcher) => zk.exists(node.path, watcher, mkStatCallBack(cb), null) }
 
     def existsNow[F[_]: Async](zk: ZooKeeper, node: ZkNode): F[Option[ZkStat]] =
@@ -302,7 +301,7 @@ object ZkClient {
         }
       }
 
-    def childrenOf[F[_]: Async](zk: ZooKeeper, node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
+    def childrenOf[F[_]: Async: Dispatcher](zk: ZooKeeper, node: ZkNode): Stream[F, Option[(List[ZkNode], ZkStat)]] = {
       def children:Stream[F, Option[(List[ZkNode], ZkStat)]] =
         mkZkStream { case (cb,watcher) =>
           zk.getChildren(node.path, watcher, mkChildren2CallBack(node)(cb), null)
@@ -448,16 +447,16 @@ object ZkClient {
       }
     }
 
-    def mkWatcher[F[_]: Async]: F[(Watcher, F[Unit])] = {
+    def mkWatcher[F[_]: Async: Dispatcher]: F[(Watcher, F[Unit])] = {
       Deferred[F, Unit].map { ref =>
         val watcher = new Watcher {
-          def process(event: WatchedEvent): Unit = (ref.complete(()).void.asInstanceOf[IO[Unit]]).unsafeRunAsync(_ => ())(cats.effect.unsafe.implicits.global)
+          def process(event: WatchedEvent): Unit = implicitly[Dispatcher[F]].unsafeRunAndForget(ref.complete(()).void)
         }
         watcher -> ref.get
       }
     }
 
-    def mkZkStream[F[_]: Async, CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit): Stream[F,O] = {
+    def mkZkStream[F[_]: Async: Dispatcher, CB <: AsyncCallback, O](register: (Either[Throwable,O] => Unit, Watcher) => Unit): Stream[F,O] = {
       def readF: F[(O, F[Unit])] = {
         Monad[F].flatMap(mkWatcher[F]){ case (watcher, awaitWatch) =>
         Async[F].async[(O, F[Unit])] { cb =>
