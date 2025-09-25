@@ -18,7 +18,7 @@ import spinoco.fs2.zk.ZkACL.Permission
 import java.time.{Instant, LocalDateTime, ZoneId}
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{List => JList}
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util.Success
 
